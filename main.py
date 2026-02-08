@@ -5,6 +5,7 @@ from routers.Chain import createChain_route, deleteChain_route,showChain_route
 from routers.Bookmarks.addbookmark import bayanbookmark_route,surahAudioBookmark_route
 from routers.Bookmarks.getBookmark import getBayanBookmark,getSurahBookmark
 
+
 app = FastAPI()
 app.mount("/audio", StaticFiles(directory="audio"), name="audio")
 
@@ -30,6 +31,9 @@ app.include_router(createChain_route.router)
 app.include_router(showChain_route.router)
 #delete chain
 app.include_router(deleteChain_route.router)
+
+from routers.Voice import voice_route
+app.include_router(voice_route.router)
 
 @app.get("/")
 def home():
