@@ -1,66 +1,74 @@
 import re
-from Services.spellCheck import find_surah_id, find_reciter_id
-from Services.romanUrdu import COMMANDS, TARGETS
+from typing import Any, Dict, Union, List
+from Services.spellCheck import find_surah_id
 
-def extract_ayat_range(text):
-    """
-    Finds numbers like: "Ayat 5 to 10" or "Ayat 5"
-    """
-    numbers = re.findall(r'\d+', text)
-    if len(numbers) == 1: return int(numbers[0]), None
-    elif len(numbers) >= 2: return int(numbers[0]), int(numbers[1])
-    return None, None
 
-def create_command_token(text):
-    text = text.lower()
-    
-    # --- OUTPUT STRUCTURE (Bilkul Simple) ---
-    token = {
-        "intent": "unknown",     # navigation | play_audio | control | bookmark
-        "data": {
-            "surah_id": None,
-            "ayat_from": None,
-            "ayat_to": None,
-            "reciter_id": None,
-            "target_screen": None,  # For navigation
-            "action": None          # For pause/next/resume
-        },
-        "raw_text": text
+def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
+
+    # --- 1️⃣ Normalize Input ---
+    if isinstance(text, list):
+        text = " ".join(str(x) for x in text)
+
+    if not text:
+        text = ""
+
+    text = str(text).strip().lower()
+
+    # --- 2️⃣ Response Structure ---
+    response: Dict[str, Any] = {
+        "player": None,
+        "surah": None,
+        "from": None,
+        "to": None
     }
 
-    # --- 1. DATA EXTRACTION (Jo mila nikaal lo) ---
-    token["data"]["surah_id"] = find_surah_id(text)
-    token["data"]["reciter_id"] = find_reciter_id(text)
-    token["data"]["ayat_from"], token["data"]["ayat_to"] = extract_ayat_range(text)
+    # --- 3️⃣ Unified Command Dictionary (English + Roman Urdu) ---
+    COMMANDS = {
+        "pause": ["pause", "stop", "ruko", "band", "wait", "thahro","pass"],
+        "next": ["next", "agla", "age", "aage", "skip", "forward"],
+        "previous": ["previous", "pichla", "peeche", "back", "wapis", "return"],
+        "play": ["play", "chalao", "sunao", "laga", "start", "resume", "open"]
+    }
 
-    # --- 2. INTENT DETECTION (Maqsad dhundo) ---
+    # --- 4️⃣ Detect Action (WORD SAFE MATCH) ---
+    for action, keywords in COMMANDS.items():
+        pattern = r"\b(" + "|".join(map(re.escape, keywords)) + r")\b"
+        if re.search(pattern, text):
+            response["player"] = action
+            break
 
-    # PRIORITY 1: NAVIGATION (Open X)
-    if "open" in text or "go to" in text or "kholo" in text:
-        token["intent"] = "navigation"
-        # Check target screen
-        for screen, keywords in TARGETS.items():
-            if any(w in text for w in keywords):
-                token["data"]["target_screen"] = screen
-                return token # Yahi return kr do, aage check krne ki zaroorat nahi
+    # --- 5️⃣ Remove Command Words Before Surah Detection ---
+    text_for_surah = text
 
-    # PRIORITY 2: PLAYING SURAH (Agar Surah ID mili hai)
-    if token["data"]["surah_id"]:
-        if "bookmark" in text:
-            token["intent"] = "bookmark"
-        elif "read" in text:
-            token["intent"] = "read_mode"
-        else:
-            token["intent"] = "play_audio" # Default action for Surah
-        return token
+    for keywords in COMMANDS.values():
+        for word in keywords:
+            text_for_surah = re.sub(
+                rf"\b{re.escape(word)}\b", 
+                "", 
+                text_for_surah
+            )
 
-    # PRIORITY 3: PLAYER CONTROLS (Pause, Next, etc.)
-    # Check if any command keyword exists in text
-    for cmd, keywords in COMMANDS.items():
-        if cmd in ["play", "pause", "next", "previous"]: # Sirf controls check kro
-            if any(w in text for w in keywords):
-                token["intent"] = "control"
-                token["data"]["action"] = cmd
-                return token
+    clean_text = text_for_surah.strip()
 
-    return token
+    # --- 6️⃣ Surah Detection ---
+    if len(clean_text) >= 3:
+        surah_id = find_surah_id(clean_text)
+    else:
+        surah_id = None
+
+    if surah_id:
+        response["surah"] = surah_id
+        # Agar sirf surah bola ho (no action), auto play
+        if response["player"] is None:
+            response["player"] = "play"
+
+    # --- 7️⃣ Ayat Extraction ---
+    numbers = [int(n) for n in re.findall(r"\b\d+\b", text)]
+
+    if len(numbers) >= 1:
+        response["from"] = numbers[0]
+
+    if len(numbers) >= 2:
+        response["to"] = numbers[1]
+
+    return response

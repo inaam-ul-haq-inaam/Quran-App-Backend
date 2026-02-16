@@ -24,7 +24,7 @@ def get_AllBayan():
         
         bayan_list = []
         # Base URL jahan apki audio files pari hain (Static folder)
-        base_audio_url = "http://10.194.143.234:8000/audio/Al-Afasy/" # Apna IP lagayen
+        base_audio_url = "http://10.251.6.105:8000/audio/Al-Afasy/" # Apna IP lagayen
 
         for row in rows:
             bayan_list.append({
