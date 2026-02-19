@@ -5,7 +5,7 @@ from schemas.ayat_schema import ayats
 router = APIRouter()
 
 # 🔹 BASE URL of your audio folder
-BASE_AUDIO_URL = "http://192.168.18.123:8000/audio/Al-Afasy/"
+BASE_AUDIO_URL = "http://192.168.31.181:8000/audio/Al-Afasy/"
 
 @router.post("/get_Surah_Ayats")
 def get_Ayats(ayat: ayats):
