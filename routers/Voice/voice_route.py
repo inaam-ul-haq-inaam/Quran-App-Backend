@@ -6,7 +6,7 @@ from Services.tokenCreate import create_command_token
 router = APIRouter(prefix="/voice", tags=["Voice Command"])
 
 
-# 📌 Request Body Model
+
 class VoiceTextRequest(BaseModel):
     text: str
 
@@ -24,7 +24,7 @@ async def process_voice_command(data: VoiceTextRequest):
                 "message": "Empty text received"
             }
 
-        # 🎯 Create Token
+        
         final_token = create_command_token(received_text)
 
         return {

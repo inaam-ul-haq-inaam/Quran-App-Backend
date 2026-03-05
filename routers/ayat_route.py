@@ -1,11 +1,11 @@
 from fastapi import APIRouter
 from database import get_connection
 from schemas.ayat_schema import ayats
-
+from config import BASE_IP
 router = APIRouter()
 
 # 🔹 BASE URL of your audio folder
-BASE_AUDIO_URL = "http://192.168.31.181:8000/audio/Al-Afasy/"
+BASE_AUDIO_URL = f"{BASE_IP}/audio/Al-Afasy/"
 
 @router.post("/get_Surah_Ayats")
 def get_Ayats(ayat: ayats):

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from database import get_connection
 from schemas import bayan_schema
+from config import BASE_IP
 router=APIRouter()
 
 @router.get("/AllBayan")
@@ -23,16 +24,16 @@ def get_AllBayan():
         rows = cursor.fetchall()
         
         bayan_list = []
-        # Base URL jahan apki audio files pari hain (Static folder)
-        base_audio_url = "http://10.251.6.105:8000/audio/Al-Afasy/" # Apna IP lagayen
+        
+        base_audio_url = f"{BASE_IP}/audio/Dr_Israr/" 
 
         for row in rows:
             bayan_list.append({
                 "BayanID": row[0],
                 "Title": row[1],
-                "AudioUrl": f"{base_audio_url}{row[2]}", # Full Path bana diya
+                "AudioUrl": f"{base_audio_url}{row[2]}", 
                 "Duration": row[3],
-                "ScholarName": row[4], # Spelling sahi ki
+                "ScholarName": row[4], 
                 "SurahName": row[5],
                 "StartAyatID": row[6],
                 "EndAyatID": row[7]

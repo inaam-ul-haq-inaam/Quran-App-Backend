@@ -134,7 +134,7 @@ SURAH_DB = {
     "nasr": 110,
     "masad": 111, "lahab": 111,
     "ikhlas": 112, "ahad": 112,
-    "falaq": 113,
+    "falaq": 113,"falak": 113,
     "nas": 114, "naas": 114
 }
 
