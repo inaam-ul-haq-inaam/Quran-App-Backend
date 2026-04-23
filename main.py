@@ -33,7 +33,9 @@ app.include_router(showChain_route.router)
 app.include_router(deleteChain_route.router)
 
 from routers.Voice import voice_route
+from routers.Chain import showChainDetails
 app.include_router(voice_route.router)
+app.include_router(showChainDetails.router)
 
 @app.get("/")
 def home():
