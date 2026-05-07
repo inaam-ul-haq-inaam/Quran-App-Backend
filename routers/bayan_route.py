@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from database import get_connection
 from schemas import bayan_schema
 from config import BASE_IP
-router=APIRouter()
+router = APIRouter()
 
 @router.get("/AllBayan")
 def get_AllBayan():
@@ -12,19 +12,18 @@ def get_AllBayan():
     
     try:
         cursor = conn.cursor()
-        # Humne query wahi rakhi hai jo aapne likhi
         query = """SELECT 
                     b.BayanID, b.Title, b.AudioURL, b.Duration, 
                     s.Name, su.NameEnglish, b.StartAyatID, b.EndAyatID
                 FROM Bayan b
                 LEFT JOIN Scholar s ON b.ScholarID = s.ScholarID
-                LEFT JOIN Surah su ON b.SurahID = su.SurahID"""
+                LEFT JOIN Surah su ON b.SurahID = su.SurahID
+                ORDER BY b.SurahID, b.StartAyatID ASC"""  # 👈 ORDER BY add kiya
         
         cursor.execute(query)
         rows = cursor.fetchall()
         
         bayan_list = []
-        
         base_audio_url = f"{BASE_IP}/audio/Dr_Israr/" 
 
         for row in rows:
@@ -48,10 +47,7 @@ def get_AllBayan():
         return {"error": str(e)}
     
     finally:
-        # Ye sabse zaroori hai: Connection hamesha band karein
         conn.close()
-
-
 
 
 @router.get("/BayanBySurah/{surah_id}")
@@ -63,14 +59,15 @@ def get_Bayan_By_Surah(surah_id: int):
     try:
         cursor = conn.cursor()
         
-        # 🛠️ NAYI QUERY: Yahan humne 'WHERE b.SurahID = ?' lagaya hai
+        # 👈 ORDER BY StartAyatID ASC - Yeh important hai!
         query = """SELECT 
                     b.BayanID, b.Title, b.AudioURL, b.Duration, 
                     s.Name, su.NameEnglish, b.StartAyatID, b.EndAyatID
                 FROM Bayan b
                 LEFT JOIN Scholar s ON b.ScholarID = s.ScholarID
                 LEFT JOIN Surah su ON b.SurahID = su.SurahID
-                WHERE b.SurahID = ?"""
+                WHERE b.SurahID = ?
+                ORDER BY b.StartAyatID ASC"""  # 👈 YAHAN ORDER BY ADD KIYA
         
         cursor.execute(query, (surah_id,))
         rows = cursor.fetchall()
@@ -92,7 +89,8 @@ def get_Bayan_By_Surah(surah_id: int):
         
         return {
             "message": f"Bayans for Surah {surah_id}",
-            "Bayans": bayan_list
+            "Bayans": bayan_list,
+            "count": len(bayan_list)  # 👈 Count bhi add kar diya
         }
     
     except Exception as e:

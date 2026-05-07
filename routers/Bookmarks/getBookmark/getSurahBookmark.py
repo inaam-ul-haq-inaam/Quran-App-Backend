@@ -11,23 +11,50 @@ def get_bookmarks(profile_id: int):
 
     cursor = conn.cursor()
     
+    # 🆕 Added 'ba.title' in select
     query = """
-    select s.namearabic,s.nameenglish,s.totalayats,ba.startayat,ba.endayat from bookmarkAudio ba 
-    join surah s on s.surahid=ba.surahid where ba.profileid=?
+    SELECT 
+        s.namearabic,
+        s.nameenglish,
+        s.totalayats,
+        ba.startayat,
+        ba.endayat,
+        ba.title           -- 👈 TITLE COLUMN ADDED
+    FROM bookmarkAudio ba 
+    JOIN surah s ON s.surahid = ba.surahid 
+    WHERE ba.profileid = ?
     """
     cursor.execute(query, (profile_id,))
     results = cursor.fetchall()
     
+    # Also get bookmarkId for delete functionality
+    query_with_id = """
+    SELECT 
+        ba.bookmarkId,
+        s.namearabic,
+        s.nameenglish,
+        s.totalayats,
+        ba.startayat,
+        ba.endayat,
+        ba.title
+    FROM bookmarkAudio ba 
+    JOIN surah s ON s.surahid = ba.surahid 
+    WHERE ba.profileid = ?
+    ORDER BY ba.bookmarkId DESC
+    """
+    cursor.execute(query_with_id, (profile_id,))
+    rows = cursor.fetchall()
 
     bookmarks = []
-    for row in results:
+    for row in rows:
         bookmarks.append({
-            "NameArabic": row[0],
-            "NameEnglish": row[1],
-            # "TotalAyats": row[2],
-            "FromAyat":row[3],
-            "To":row[4]
-            
+            "bookmarkId": row[0],
+            "NameArabic": row[1],
+            "NameEnglish": row[2],
+            "TotalAyats": row[3],
+            "FromAyat": row[4],
+            "ToAyat": row[5],
+            "title": row[6] if row[6] else f"{row[2]} - Ayat {row[4]}"  # 👈 Default title if null
         })
 
     return {"bookmarks": bookmarks}

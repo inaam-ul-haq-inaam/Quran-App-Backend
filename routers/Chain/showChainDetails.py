@@ -1,23 +1,62 @@
 from fastapi import APIRouter
 from database import get_connection
 from config import BASE_IP
+from urllib.parse import unquote
 
 router = APIRouter()
-
-# Wahi BASE_URL jo aapke working code mein hai
 BASE_AUDIO_URL = f"{BASE_IP}/audio/Al-Afasy/"
 
+# ============================================================
+# EXISTING ENDPOINT (by ID) - Already hai tumhare paas
+# ============================================================
 @router.get("/getChainDetails/{chainId}")
 def get_chain_details(chainId: int):
+    # ... tumhara existing code ...
+    pass
+
+# ============================================================
+# 🆕 NEW ENDPOINT (by Name) - YEH ADD KARO
+# ============================================================
+@router.get("/getChainByName/{chainName}")
+def get_chain_by_name(chainName: str):
     conn = get_connection()
     if conn is None:
-        return {"message": "fail to build connection"}
+        return {"message": "fail to build connection", "data": []}
 
     try:
         cursor = conn.cursor()
-
-        # 1. Screenshot ke mutabiq exact Table aur Column names
-        # Table: ChainDetail, Columns: SurahID, ChainID, StartAyat, EndAyat, playOrder
+        
+        # Decode URL encoded string
+        decoded_name = unquote(chainName).strip()
+        print(f"🔍 Searching chain by name: '{decoded_name}'")
+        
+        # Search by title (exact match, case insensitive)
+        name_query = """
+            SELECT TOP 1 ChainID 
+            FROM dbo.Chain 
+            WHERE LOWER(title) = LOWER(?)
+        """
+        cursor.execute(name_query, (decoded_name,))
+        row = cursor.fetchone()
+        
+        # If not found, try partial match
+        if not row:
+            name_query = """
+                SELECT TOP 1 ChainID 
+                FROM dbo.Chain 
+                WHERE LOWER(title) LIKE ?
+            """
+            cursor.execute(name_query, (f"%{decoded_name.lower()}%",))
+            row = cursor.fetchone()
+        
+        if not row:
+            print(f"❌ No chain found with name: '{decoded_name}'")
+            return {"message": "Chain not found", "data": []}
+        
+        chain_id = row[0]
+        print(f"✅ Found chain ID: {chain_id} for name: '{decoded_name}'")
+        
+        # Fetch chain details (same as existing logic)
         query = """
             SELECT 
                 cd.SurahID, 
@@ -31,7 +70,7 @@ def get_chain_details(chainId: int):
             WHERE cd.ChainID = ?
             ORDER BY cd.playOrder ASC
         """
-        cursor.execute(query, (chainId,))
+        cursor.execute(query, (chain_id,))
         rows = cursor.fetchall()
 
         if not rows:
@@ -39,15 +78,10 @@ def get_chain_details(chainId: int):
 
         playlist = []
 
-        # 2. Range ko expand karne ki logic
         for row in rows:
-            # row indexing: 0:SurahID, 1:NameEnglish, 2:StartAyat, 3:EndAyat, 4:ReciterID
             s_id, s_name, start, end, r_id = row
             
-            # Ayat range ka loop
             for ayat_num in range(start, end + 1):
-                
-                # 3. Ayat ka data mangwayein (Wahi names jo aapke working code mein hain)
                 ayat_query = """
                     SELECT 
                         a.arabicText, 
@@ -67,7 +101,7 @@ def get_chain_details(chainId: int):
                         "ayatNumber": ayat_num,
                         "ArabicText": res[0],
                         "urduText": res[1],
-                        "audio": BASE_AUDIO_URL + res[2] 
+                        "audio": BASE_AUDIO_URL + res[2] if res[2] else None
                     })
 
         return {
@@ -77,6 +111,6 @@ def get_chain_details(chainId: int):
 
     except Exception as e:
         print(f"Error: {str(e)}")
-        return {"message": "Internal Server Error", "error": str(e)}
+        return {"message": "Internal Server Error", "error": str(e), "data": []}
     finally:
         conn.close()
