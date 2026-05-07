@@ -1,5 +1,6 @@
 # token_creator.py - COMPLETE WORKING CODE
-# Features: Chain Creation, Chain Play, Bookmark, Range Playback, Next/Previous/Play/Pause/Stop/Resume
+# Features: Chain Creation, Chain Play, Bookmark, Range Playback, 
+#           Next/Previous/Play/Pause/Stop/Resume, Bayan with Index
 
 import re
 from typing import Any, Dict, Union, List
@@ -170,10 +171,13 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["player"] = "show_bookmarks"
         response["type"] = "bookmark"
         return response
-    
-        # ============================================================
+
+    # ============================================================
     # SECTION 3: BAYAN DETECTION (FIXED - No variable error)
     # ============================================================
+    
+    # Define BAYAN_KEYWORDS here (was missing!)
+    BAYAN_KEYWORDS = ["bayan", "tafseer", "tafsir", "tarjuma", "explanation"]
     
     # Pattern 1: "play bayan baqarah first" or "play bayan baqarah second"
     bayan_with_index = re.search(r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)\s+(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|pehla|dosra|tesra|chautha|panchwa)", text)
@@ -212,9 +216,6 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             return response
         else:
             print(f"❌ Surah not found: {surah_name}")
-            response["player"] = "play"
-            response["type"] = "bayan"
-            response["surahId"] = None
             return response
     
     # Pattern 2: Simple bayan "play bayan baqarah"
@@ -236,9 +237,6 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             return response
         else:
             print(f"❌ Surah not found: {surah_name}")
-            response["player"] = "play"
-            response["type"] = "bayan"
-            response["surahId"] = None
             return response
     
     # Pattern 3: Introduction bayan
@@ -249,7 +247,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["bayanIndex"] = 0
         print("🎤 Introduction bayan")
         return response
-    
+
     # ============================================================
     # SECTION 4: PLAY CHAIN (Explicit "chain" word required)
     # ============================================================
@@ -371,20 +369,32 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     # SECTION 7: SURAH DETECTION
     # ============================================================
     
-    if response["player"] not in ["select_surah", "select_ayat", "add_to_list", "set_title", "save_chain", "remove_last", "clear_all", "show_list", "cancel_chain", "open_chain_builder", "bookmark_surah", "bookmark_ayat", "bookmark_range", "bookmark_with_title", "show_bookmarks", "play_range", "play_chain", "next", "previous", "pause", "resume", "stop", "jump"]:
+    # List of actions to skip surah detection
+    skip_actions = ["select_surah", "select_ayat", "add_to_list", "set_title", "save_chain", 
+                    "remove_last", "clear_all", "show_list", "cancel_chain", "open_chain_builder", 
+                    "bookmark_surah", "bookmark_ayat", "bookmark_range", "bookmark_with_title", 
+                    "show_bookmarks", "play_range", "play_chain", "next", "previous", "pause", 
+                    "resume", "stop", "jump"]
+    
+    if response["player"] not in skip_actions:
         
         text_for_surah = text
+        
+        # Remove command words
         for keywords in COMMANDS.values():
             for word in keywords:
                 text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
         
+        # Remove bayan keywords
         for word in BAYAN_KEYWORDS:
             text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
         
+        # Remove range phrases
         range_phrases = ["from", "to", "se", "tak", "ayat", "verse"]
         for phrase in range_phrases:
             text_for_surah = re.sub(rf"\b{re.escape(phrase)}\b", "", text_for_surah)
         
+        # Remove numbers
         text_for_surah = re.sub(r"\b\d+\b", "", text_for_surah)
         clean_text = text_for_surah.strip()
 
