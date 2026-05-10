@@ -1,13 +1,36 @@
-# token_creator.py - COMPLETE WORKING CODE
-# Features: Chain Creation, Chain Play, Bookmark, Range Playback, 
-#           Next/Previous/Play/Pause/Stop/Resume, Bayan with Index
+# token_creator.py - Complete Voice Command Token Creator
+# Features: 
+#   1. Quran Play (Full Surah, Single Ayat, Range)
+#   2. Chain Creation (Create, Select, Add, Save, etc.)
+#   3. Chain Play
+#   4. Bookmark (Surah, Ayat, Range)
+#   5. Bayan Play (with First, Second, Third... support)
+#   6. Player Controls (Play, Pause, Stop, Resume, Next, Previous)
 
 import re
 from typing import Any, Dict, Union, List
-from Services.spellCheck import find_surah_id
+
+# Import from data.py (single source of truth)
+from Services.data import (
+    normalize_text,
+    COMMANDS,
+    BAYAN_INDEX_MAP,
+    PLAYER_COMMANDS,
+    SKIP_ACTIONS
+)
+from Services.spellCheck import find_surah_id 
+
 
 def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
-
+    """
+    Main function to convert voice text to command token
+    Returns a dictionary with player action and all necessary data
+    """
+    
+    # ============================================================
+    # 1️⃣ INPUT NORMALIZATION
+    # ============================================================
+    
     if isinstance(text, list):
         text = " ".join(str(x) for x in text)
 
@@ -15,27 +38,36 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         text = ""
 
     text = str(text).strip().lower()
+    
+    # Normalize text (handles spelling mistakes: aayat→ayat, bayaan→bayan, etc.)
+    original_text = text
+    text = normalize_text(text)
+    
+    if original_text != text:
+        print(f"📝 Text normalized: '{original_text}' → '{text}'")
 
+    # Response structure
     response: Dict[str, Any] = {
-        "player": None,
-        "type": "surah",
-        "surah": None,
-        "from": None,
-        "to": None,
-        "isVoiceMode": True
+        "player": None,      # Action to perform (play, pause, etc.)
+        "type": "surah",     # Type: surah, chain, bookmark, bayan
+        "surah": None,       # Surah ID
+        "from": None,        # Starting ayat (for range)
+        "to": None,          # Ending ayat (for range)
+        "isVoiceMode": True  # Voice command flag
     }
 
+
     # ============================================================
-    # SECTION 1: CHAIN CREATION COMMANDS (Highest Priority)
+    # 2️⃣ CHAIN CREATION COMMANDS (Highest Priority)
     # ============================================================
     
-    # 1.1 - Open chain builder
+    # 2.1 - Open chain builder screen
     if re.search(r"create\s+chain", text):
         response["player"] = "open_chain_builder"
         response["type"] = "chain"
         return response
     
-    # 1.2 - Select surah for chain
+    # 2.2 - Select surah for chain
     if re.search(r"select\s+surah", text):
         surah_match = re.search(r"surah\s+([a-z]+)", text)
         if surah_match:
@@ -44,9 +76,9 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["surahName"] = surah_match.group(1)
             return response
     
-    # 1.3 - Select ayat for chain (SINGLE and RANGE)
+    # 2.3 - Select ayat for chain (SINGLE and RANGE)
     if re.search(r"select\s+ayat", text):
-        # First check for RANGE: "select ayat 1 to 8" or "select ayat 1 se 8"
+        # Check for RANGE first: "select ayat 1 to 8"
         range_match = re.search(r"select\s+ayat\s+(\d+)\s+(?:to|se)\s+(\d+)", text)
         if range_match:
             response["player"] = "select_ayat"
@@ -65,13 +97,13 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"🎯 Single ayat matched: {response['fromAyat']}")
             return response
     
-    # 1.4 - Add to list
+    # 2.4 - Add current selection to chain list
     if re.search(r"add\s+to\s+list", text) or re.search(r"add\s+kar", text):
         response["player"] = "add_to_list"
         response["type"] = "chain"
         return response
     
-    # 1.5 - Set title
+    # 2.5 - Set chain title
     title_match = re.search(r"(?:title|name|set title)\s+(.+?)(?:\s+chain)?$", text)
     if not title_match:
         title_match = re.search(r"naam\s+(.+)", text)
@@ -85,41 +117,42 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["title"] = title
             return response
     
-    # 1.6 - Save chain
+    # 2.6 - Save chain
     if re.search(r"save\s+chain", text):
         response["player"] = "save_chain"
         response["type"] = "chain"
         return response
     
-    # 1.7 - Remove last
+    # 2.7 - Remove last item from chain
     if re.search(r"remove\s+last", text) or re.search(r"last\s+hatayo", text):
         response["player"] = "remove_last"
         response["type"] = "chain"
         return response
     
-    # 1.8 - Clear all
+    # 2.8 - Clear all items from chain
     if re.search(r"clear\s+all", text) or re.search(r"sab\s+hatayo", text):
         response["player"] = "clear_all"
         response["type"] = "chain"
         return response
     
-    # 1.9 - Show list
+    # 2.9 - Show current chain list
     if re.search(r"show\s+list", text) or re.search(r"list\s+dikhao", text):
         response["player"] = "show_list"
         response["type"] = "chain"
         return response
     
-    # 1.10 - Cancel chain
+    # 2.10 - Cancel chain creation
     if re.search(r"cancel\s+chain", text) or re.search(r"chain\s+cancel", text):
         response["player"] = "cancel_chain"
         response["type"] = "chain"
         return response
 
+
     # ============================================================
-    # SECTION 2: BOOKMARK COMMANDS
+    # 3️⃣ BOOKMARK COMMANDS
     # ============================================================
     
-    # 2.1 - Bookmark full surah
+    # 3.1 - Bookmark full surah: "bookmark fatiha"
     surah_bookmark_match = re.search(r"bookmark\s+([a-z]+)(?:\s+ayat)?$", text)
     if surah_bookmark_match and "ayat" not in text:
         surah_name = surah_bookmark_match.group(1)
@@ -128,7 +161,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["surahName"] = surah_name
         return response
     
-    # 2.2 - Bookmark specific ayat
+    # 3.2 - Bookmark specific ayat: "bookmark fatiha ayat 5"
     ayat_bookmark_match = re.search(r"bookmark\s+([a-z]+)\s+ayat\s+(\d+)", text)
     if ayat_bookmark_match:
         surah_name = ayat_bookmark_match.group(1)
@@ -139,7 +172,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["fromAyat"] = ayat_num
         return response
     
-    # 2.3 - Bookmark range
+    # 3.3 - Bookmark range: "bookmark fatiha from ayat 1 to 3"
     range_bookmark_match = re.search(r"bookmark\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text)
     if not range_bookmark_match:
         range_bookmark_match = re.search(r"bookmark\s+([a-z]+)\s+ayat\s+(\d+)\s+(?:to|se)\s+(\d+)", text)
@@ -155,7 +188,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["toAyat"] = to_ayat
         return response
     
-    # 2.4 - Bookmark with custom title
+    # 3.4 - Bookmark with custom title: "bookmark fatiha as my favorite"
     title_bookmark = re.search(r"bookmark\s+([a-z]+)\s+as\s+(.+)", text)
     if title_bookmark:
         surah_name = title_bookmark.group(1)
@@ -166,20 +199,18 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["title"] = custom_title
         return response
     
-    # 2.5 - Show bookmarks list
+    # 3.5 - Show bookmarks list
     if re.search(r"(?:show|my)\s+bookmarks", text):
         response["player"] = "show_bookmarks"
         response["type"] = "bookmark"
         return response
 
+
     # ============================================================
-    # SECTION 3: BAYAN DETECTION (FIXED - No variable error)
+    # 4️⃣ BAYAN COMMANDS (with First, Second, Third support)
     # ============================================================
     
-    # Define BAYAN_KEYWORDS here (was missing!)
-    BAYAN_KEYWORDS = ["bayan", "tafseer", "tafsir", "tarjuma", "explanation"]
-    
-    # Pattern 1: "play bayan baqarah first" or "play bayan baqarah second"
+    # 4.1 - Bayan with index: "play bayan baqarah first"
     bayan_with_index = re.search(r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)\s+(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|pehla|dosra|tesra|chautha|panchwa)", text)
     
     if not bayan_with_index:
@@ -188,24 +219,8 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     if bayan_with_index:
         surah_name = bayan_with_index.group(1)
         index_word = bayan_with_index.group(2).lower()
-        
-        # Index mapping
-        index_map = {
-            "first": 0, "pehla": 0,
-            "second": 1, "dosra": 1,
-            "third": 2, "tesra": 2,
-            "fourth": 3, "chautha": 3,
-            "fifth": 4, "panchwa": 4,
-            "sixth": 5,
-            "seventh": 6,
-            "eighth": 7,
-            "ninth": 8,
-            "tenth": 9,
-        }
-        
-        from Services.spellCheck import find_surah_id
+        bayan_index = BAYAN_INDEX_MAP.get(index_word, 0)
         surah_id = find_surah_id(surah_name)
-        bayan_index = index_map.get(index_word, 0)
         
         if surah_id:
             response["player"] = "play"
@@ -218,14 +233,13 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"❌ Surah not found: {surah_name}")
             return response
     
-    # Pattern 2: Simple bayan "play bayan baqarah"
+    # 4.2 - Simple bayan (first by default)
     bayan_match = re.search(r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)", text)
     if not bayan_match:
         bayan_match = re.search(r"bayan\s+(?:play|sunao|chalao)\s+([a-z]+)", text)
     
     if bayan_match:
         surah_name = bayan_match.group(1)
-        from Services.spellCheck import find_surah_id
         surah_id = find_surah_id(surah_name)
         
         if surah_id:
@@ -239,7 +253,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"❌ Surah not found: {surah_name}")
             return response
     
-    # Pattern 3: Introduction bayan
+    # 4.3 - Introduction bayan
     if re.search(r"introduction\s+to\s+quran", text) or re.search(r"intro\s+bayan", text):
         response["player"] = "play"
         response["type"] = "bayan"
@@ -248,11 +262,12 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         print("🎤 Introduction bayan")
         return response
 
+
     # ============================================================
-    # SECTION 4: PLAY CHAIN (Explicit "chain" word required)
+    # 5️⃣ CHAIN PLAY COMMANDS
     # ============================================================
     
-    # Pattern 1: "play chain daily", "play chain night"
+    # 5.1 - "play chain daily"
     play_chain_match = re.search(r"(?:play|sunao|chalao)\s+chain\s+(\w+(?:\s+\w+)?)", text)
     if play_chain_match:
         chain_name = play_chain_match.group(1).strip()
@@ -261,7 +276,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["chainName"] = chain_name
         return response
     
-    # Pattern 2: "daily chain play"
+    # 5.2 - "daily chain play"
     alt_match = re.search(r"(\w+(?:\s+\w+)?)\s+chain\s+(?:play|sunao|chalao)", text)
     if alt_match:
         chain_name = alt_match.group(1).strip()
@@ -270,13 +285,12 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["chainName"] = chain_name
         return response
 
+
     # ============================================================
-    # SECTION 5: RANGE PLAYBACK (4 PATTERNS)
+    # 6️⃣ QURAN PLAYBACK (Full Surah, Single Ayat, Range)
     # ============================================================
     
-    from Services.spellCheck import find_surah_id
-    
-    # Pattern 1: "play fatiha from ayat 2" → 2 se end tak
+    # Pattern 1: "play fatiha from ayat 2" → Ayat 2 se end tak
     pattern1 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)", text)
     if pattern1:
         surah_name = pattern1.group(1)
@@ -284,14 +298,15 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         surah_id = find_surah_id(surah_name)
         
         if surah_id:
-            response["player"] = "play_range"
+            response["player"] = "play"
             response["type"] = "surah"
             response["surah"] = surah_id
             response["from"] = from_ayat
-            response["to"] = None
+            response["to"] = None  # None means till end
+            print(f"🎯 Quran Range: {surah_name} from ayat {from_ayat} to end")
             return response
     
-    # Pattern 2: "play fatiha from ayat 1 to 5" → specific range
+    # Pattern 2: "play fatiha from ayat 1 to 5" → Specific range
     pattern2 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text)
     if not pattern2:
         pattern2 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)\s+to\s+(\d+)", text)
@@ -303,14 +318,15 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         surah_id = find_surah_id(surah_name)
         
         if surah_id:
-            response["player"] = "play_range"
+            response["player"] = "play"
             response["type"] = "surah"
             response["surah"] = surah_id
             response["from"] = from_ayat
             response["to"] = to_ayat
+            print(f"🎯 Quran Range: {surah_name} from ayat {from_ayat} to {to_ayat}")
             return response
     
-    # Pattern 3: "play fatiha ayat 3" → single ayat
+    # Pattern 3: "play fatiha ayat 3" → Single ayat
     pattern3 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)", text)
     if pattern3:
         surah_name = pattern3.group(1)
@@ -318,14 +334,15 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         surah_id = find_surah_id(surah_name)
         
         if surah_id:
-            response["player"] = "play_range"
+            response["player"] = "play"
             response["type"] = "surah"
             response["surah"] = surah_id
             response["from"] = ayat_num
             response["to"] = ayat_num
+            print(f"🎯 Quran Single Ayat: {surah_name} ayat {ayat_num}")
             return response
     
-    # Pattern 4: "play fatiha to ayat 5" → 1 se 5 tak
+    # Pattern 4: "play fatiha to ayat 5" → Ayat 1 se 5 tak
     pattern4 = re.search(r"play\s+([a-z]+)\s+to\s+ayat\s+(\d+)", text)
     if not pattern4:
         pattern4 = re.search(r"play\s+([a-z]+)\s+tak\s+ayat\s+(\d+)", text)
@@ -336,63 +353,61 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         surah_id = find_surah_id(surah_name)
         
         if surah_id:
-            response["player"] = "play_range"
+            response["player"] = "play"
             response["type"] = "surah"
             response["surah"] = surah_id
             response["from"] = 1
             response["to"] = to_ayat
+            print(f"🎯 Quran Range: {surah_name} from start to ayat {to_ayat}")
+            return response
+    
+    # Pattern 5: "play fatiha" → Full surah
+    pattern5 = re.search(r"play\s+([a-z]+)$", text)
+    if pattern5:
+        surah_name = pattern5.group(1)
+        surah_id = find_surah_id(surah_name)
+        
+        if surah_id:
+            response["player"] = "play"
+            response["type"] = "surah"
+            response["surah"] = surah_id
+            response["from"] = 1
+            response["to"] = None  # None means full surah
+            print(f"🎯 Quran Full Surah: {surah_name}")
             return response
 
+
     # ============================================================
-    # SECTION 6: STANDARD PLAYER COMMANDS (FIXED)
+    # 7️⃣ STANDARD PLAYER CONTROLS
     # ============================================================
-    
-    COMMANDS = {
-        "play": ["play", "chalao", "sunao", "laga", "start", "open"],
-        "pause": ["pause", "ruko", "band", "wait", "thahro", "pass", "roko"],
-        "stop": ["stop", "band kar", "rok do", "khatam", "close"],
-        "resume": ["resume", "continue", "agey", "aage se", "phir se", "dobara"],
-        "next": ["next", "agla", "age", "aage", "skip", "forward", "agla ayat", "next ayat"],
-        "previous": ["previous", "pichla", "peeche", "back", "wapis", "return", "pichla ayat", "back ayat"],
-        "jump": ["jump", "go to", "goto", "jao", "chalo"]
-    }
 
     if response["player"] is None:
         for action, keywords in COMMANDS.items():
-            pattern = r"\b(" + "|".join(map(re.escape, keywords)) + r")\b"
-            if re.search(pattern, text):
-                response["player"] = action
-                print(f"🎯 Matched command: {action} for text: {text}")
-                break
+            if action in PLAYER_COMMANDS:
+                pattern = r"\b(" + "|".join(map(re.escape, keywords)) + r")\b"
+                if re.search(pattern, text):
+                    response["player"] = action
+                    print(f"🎯 Matched command: {action}")
+                    break
+
 
     # ============================================================
-    # SECTION 7: SURAH DETECTION
+    # 8️⃣ SURAH DETECTION (Fallback)
     # ============================================================
     
-    # List of actions to skip surah detection
-    skip_actions = ["select_surah", "select_ayat", "add_to_list", "set_title", "save_chain", 
-                    "remove_last", "clear_all", "show_list", "cancel_chain", "open_chain_builder", 
-                    "bookmark_surah", "bookmark_ayat", "bookmark_range", "bookmark_with_title", 
-                    "show_bookmarks", "play_range", "play_chain", "next", "previous", "pause", 
-                    "resume", "stop", "jump"]
-    
-    if response["player"] not in skip_actions:
-        
+    if response["player"] not in SKIP_ACTIONS and response["player"] is None:
         text_for_surah = text
         
         # Remove command words
-        for keywords in COMMANDS.values():
-            for word in keywords:
-                text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
+        for action, keywords in COMMANDS.items():
+            if action in PLAYER_COMMANDS:
+                for word in keywords:
+                    text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
         
-        # Remove bayan keywords
-        for word in BAYAN_KEYWORDS:
+        # Remove common words
+        remove_words = ["bayan", "tafseer", "from", "to", "se", "tak", "ayat", "verse", "aayat", "ayah"]
+        for word in remove_words:
             text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
-        
-        # Remove range phrases
-        range_phrases = ["from", "to", "se", "tak", "ayat", "verse"]
-        for phrase in range_phrases:
-            text_for_surah = re.sub(rf"\b{re.escape(phrase)}\b", "", text_for_surah)
         
         # Remove numbers
         text_for_surah = re.sub(r"\b\d+\b", "", text_for_surah)
@@ -400,16 +415,17 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
 
         if len(clean_text) >= 3:
             surah_id = find_surah_id(clean_text)
-        else:
-            surah_id = None
-
-        if surah_id:
-            response["surah"] = surah_id
-            if response["player"] is None:
+            if surah_id:
                 response["player"] = "play"
+                response["type"] = "surah"
+                response["surah"] = surah_id
+                response["from"] = 1
+                response["to"] = None
+                print(f"🎯 Quran detected via fallback: {clean_text}")
+
 
     # ============================================================
-    # SECTION 8: NUMBERS EXTRACTION
+    # 9️⃣ NUMBERS EXTRACTION (for range)
     # ============================================================
     
     numbers = [int(n) for n in re.findall(r"\b\d+\b", text)]
@@ -420,4 +436,9 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     if len(numbers) >= 2 and not response.get("to"):
         response["to"] = numbers[1]
 
+
+    # ============================================================
+    # 🔟 FINAL RETURN
+    # ============================================================
+    
     return response

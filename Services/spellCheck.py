@@ -1,153 +1,35 @@
+# spellCheck.py - Main Spell Checking and Fuzzy Matching Logic
+# Handles: Surah detection, Reciter detection, Ayat extraction, Bayan index extraction
+
+import re
 from thefuzz import process, fuzz
 
-SURAH_DB = {
-    # 1–10
-    "fatiha": 1, "al fatiha": 1,
-    "baqarah": 2, "baqara": 2, "bakra": 2,
-    "aal imran": 3, "imran": 3,
-    "nisa": 4, "an nisa": 4, "neesa": 4,
-    "maidah": 5, "maida": 5,
-    "anam": 6, "anaam": 6,
-    "araf": 7, "aaraf": 7,
-    "anfal": 8, "anfaal": 8,
-    "tawbah": 9, "tawba": 9, "tauba": 9,
-    "yunus": 10, "younus": 10,
+# Import all data from data.py
+from Services.data import (
+    SURAH_DB,
+    RECITER_DB,
+    COMMANDS,
+    BAYAN_INDEX_MAP,
+    TARGETS,
+    WHISPER_PROMPT,
+    normalize_text,
+    PLAYER_COMMANDS,
+    SKIP_ACTIONS
+)
 
-    # 11–20
-    "hud": 11, "hood": 11,
-    "yusuf": 12, "yousuf": 12, "joseph": 12,
-    "rad": 13, "raad": 13,
-    "ibrahim": 14, "ibraheem": 14,
-    "hijr": 15,
-    "nahl": 16,
-    "isra": 17, "bani israel": 17,
-    "kahf": 18,
-    "maryam": 19, "mariyam": 19,
-    "taha": 20, "ta ha": 20,
 
-    # 21–30
-    "anbiya": 21, "ambiya": 21,
-    "hajj": 22, "haj": 22,
-    "muminun": 23, "mominoon": 23,
-    "nur": 24, "noor": 24,
-    "furqan": 25,
-    "shuara": 26,
-    "naml": 27,
-    "qasas": 28, "kasas": 28,
-    "ankabut": 29, "ankaboot": 29, "spider": 29,
-    "rum": 30, "room": 30, "rome": 30,
+# ============================================================
+# SURAH DETECTION (with fuzzy matching)
+# ============================================================
 
-    # 31–40
-    "luqman": 31, "lukman": 31,
-    "sajdah": 32, "sajda": 32,
-    "ahzab": 33,
-    "saba": 34,
-    "fatir": 35,
-    "yasin": 36, "yaseen": 36,
-    "saffat": 37,
-    "sad": 38, "saad": 38,
-    "zumar": 39,
-    "ghafir": 40, "mumin": 40,
-
-    # 41–50
-    "fussilat": 41, "hamim sajdah": 41,
-    "ash shura": 42, "shuraa": 42,
-    "zukhruf": 43,
-    "dukhan": 44,
-    "jathiyah": 45,
-    "ahqaf": 46,
-    "muhammad": 47,
-    "fath": 48,
-    "hujurat": 49,
-    "qaf": 50, "qaaf": 50,
-
-    # 51–60
-    "dhariyat": 51, "zariyat": 51,
-    "tur": 52, "toor": 52,
-    "najm": 53,
-    "qamar": 54,
-    "rahman": 55, "rehman": 55,
-    "waqiah": 56, "waqia": 56,
-    "hadid": 57, "hadeed": 57,
-    "mujadilah": 58,
-    "hashr": 59,
-    "mumtahanah": 60,
-
-    # 61–70
-    "saff": 61,
-    "jumuah": 62, "jumma": 62,
-    "munafiqun": 63,
-    "taghabun": 64,
-    "talaq": 65,
-    "tahrim": 66,
-    "mulk": 67,
-    "qalam": 68,
-    "haqqah": 69,
-    "maarij": 70,
-
-    # 71–80
-    "nuh": 71, "nooh": 71,
-    "jinn": 72,
-    "muzzammil": 73,
-    "muddathir": 74,
-    "qiyamah": 75,
-    "insan": 76, "dahr": 76,
-    "mursalat": 77,
-    "naba": 78,
-    "naziat": 79,
-    "abasa": 80,
-
-    # 81–90
-    "takwir": 81,
-    "infitar": 82,
-    "mutaffifin": 83,
-    "inshiqaq": 84,
-    "buruj": 85,
-    "tariq": 86,
-    "ala": 87, "aala": 87,
-    "ghashiyah": 88,
-    "fajr": 89,
-    "balad": 90,
-
-    # 91–100
-    "shams": 91,
-    "layl": 92, "lail": 92,
-    "duha": 93, "wadduha": 93,
-    "sharh": 94, "inshirah": 94,
-    "tin": 95, "teen": 95,
-    "alaq": 96,
-    "qadr": 97,
-    "bayyinah": 98,
-    "zalzalah": 99,
-    "adiyat": 100,
-
-    # 101–114
-    "qariah": 101,
-    "takathur": 102,
-    "asr": 103,
-    "humazah": 104,
-    "fil": 105, "elephant": 105,
-    "quraysh": 106, "quraish": 106,
-    "maun": 107,
-    "kawthar": 108, "kausar": 108,
-    "kafirun": 109,
-    "nasr": 110,
-    "masad": 111, "lahab": 111,
-    "ikhlas": 112, "ahad": 112,
-    "falaq": 113,"falak": 113,
-    "nas": 114, "naas": 114
-}
-
-RECITER_DB = {
-    "afasy": 1,
-    "al afasy": 1,
-    "mishary": 1,
-    "mishari": 1,
-    "mishary al afasy": 1
-}
-
-def find_surah_id(text: str):
-
+def find_surah_id(text: str) -> int:
+    """
+    Find surah ID from text with multiple matching strategies:
+    1. Exact match
+    2. Direct word match
+    3. Phrase match
+    4. Fuzzy match (thefuzz library)
+    """
     if not text:
         return None
 
@@ -155,54 +37,66 @@ def find_surah_id(text: str):
 
     # 1️⃣ Exact full match (fastest)
     if text in SURAH_DB:
-        print(f"📖 Exact Surah Match: {text}")
+        print(f"📖 Exact Surah Match: '{text}' → ID: {SURAH_DB[text]}")
         return SURAH_DB[text]
 
     words = text.split()
 
-    # 2️⃣ Direct word match
+    # 2️⃣ Direct word match (check each word)
     for word in words:
         if word in SURAH_DB:
-            print(f"📖 Direct Word Match: {word}")
+            print(f"📖 Direct Word Match: '{word}' → ID: {SURAH_DB[word]}")
             return SURAH_DB[word]
 
-    # 3️⃣ Multi-word match check (like 'al fatiha')
+    # 3️⃣ Multi-word phrase match
     for key in SURAH_DB.keys():
         if key in text:
-            print(f"📖 Phrase Match: {key}")
+            print(f"📖 Phrase Match: '{key}' → ID: {SURAH_DB[key]}")
             return SURAH_DB[key]
 
-    # 4️⃣ Fuzzy fallback (safer scorer)
+    # 4️⃣ Fuzzy fallback (for spelling mistakes)
+    # Use token_set_ratio for better partial matching
     best_match, score = process.extractOne(
         text,
         SURAH_DB.keys(),
         scorer=fuzz.token_set_ratio
     )
 
-    if score >= 70:
-        print(f"📖 Fuzzy Surah Detect: '{best_match}' Score: {score}%")
+    if score >= 70:  # 70% confidence threshold
+        print(f"📖 Fuzzy Surah Detect: '{best_match}' (Score: {score}%) → ID: {SURAH_DB[best_match]}")
         return SURAH_DB[best_match]
+    else:
+        print(f"⚠️ No surah match found for: '{text}' (Best score: {score}%)")
 
     return None
 
 
-def find_reciter_id(text: str):
+# ============================================================
+# RECITER DETECTION (with fuzzy matching)
+# ============================================================
 
+def find_reciter_id(text: str) -> int:
+    """
+    Find reciter ID from text
+    Supports: Mishary, Sudais, Shuraim, Ghamdi, etc.
+    """
     if not text:
         return None
 
     text = text.lower().strip()
 
-    # Exact match
+    # 1️⃣ Exact match
     if text in RECITER_DB:
+        print(f"🎤 Exact Reciter Match: '{text}' → ID: {RECITER_DB[text]}")
         return RECITER_DB[text]
 
-    # Phrase match
-    for key in RECITER_DB.keys():
+    # 2️⃣ Phrase match (contains keyword)
+    for key, reciter_id in RECITER_DB.items():
         if key in text:
-            return RECITER_DB[key]
+            print(f"🎤 Phrase Reciter Match: '{key}' → ID: {reciter_id}")
+            return reciter_id
 
-    # Fuzzy fallback
+    # 3️⃣ Fuzzy fallback
     best_match, score = process.extractOne(
         text,
         RECITER_DB.keys(),
@@ -210,7 +104,320 @@ def find_reciter_id(text: str):
     )
 
     if score >= 85:
-        print(f"🎤 Fuzzy Reciter Detect: '{best_match}' Score: {score}%")
+        print(f"🎤 Fuzzy Reciter Detect: '{best_match}' (Score: {score}%) → ID: {RECITER_DB[best_match]}")
         return RECITER_DB[best_match]
 
     return None
+
+
+# ============================================================
+# AYAT NUMBER EXTRACTION
+# ============================================================
+
+def extract_ayat_number(text: str) -> int:
+    """
+    Extract ayat number from text
+    Supports: "ayat 5", "aayat 15", "ayah 3", or just "5"
+    """
+    if not text:
+        return None
+    
+    # First normalize text (handles aayat, ayah, etc.)
+    text = normalize_text(text)
+    
+    # Pattern 1: "ayat 5" or "ayat 15"
+    match = re.search(r'ayat\s+(\d+)', text)
+    if match:
+        ayat_num = int(match.group(1))
+        print(f"📖 Ayat number extracted: {ayat_num}")
+        return ayat_num
+    
+    # Pattern 2: Single number without "ayat" word (but not if it's part of range)
+    # Check if it's a standalone number
+    match = re.search(r'\b(\d+)\b', text)
+    if match:
+        # Make sure it's not part of a larger number sequence
+        num = int(match.group(1))
+        # Avoid extracting numbers that are part of range (like 3 in "3 to 5")
+        if not re.search(rf'{num}\s+(?:to|se)\s+\d+', text):
+            print(f"📖 Standalone number extracted as ayat: {num}")
+            return num
+    
+    return None
+
+
+# ============================================================
+# AYAT RANGE EXTRACTION
+# ============================================================
+
+def extract_ayat_range(text: str) -> tuple:
+    """
+    Extract ayat range from text
+    Returns: (from_ayat, to_ayat) or (None, None)
+    Supports: "ayat 3 to 8", "ayat 1 se 5", "3 to 8"
+    """
+    if not text:
+        return None, None
+    
+    text = normalize_text(text)
+    
+    # Pattern 1: "ayat 3 to 8" or "ayat 1 se 5"
+    match = re.search(r'ayat\s+(\d+)\s+(?:to|se)\s+(\d+)', text)
+    if match:
+        from_ayat = int(match.group(1))
+        to_ayat = int(match.group(2))
+        print(f"📖 Ayat range extracted: {from_ayat} to {to_ayat}")
+        return from_ayat, to_ayat
+    
+    # Pattern 2: "3 to 8" or "1 se 5"
+    match = re.search(r'(\d+)\s+(?:to|se)\s+(\d+)', text)
+    if match:
+        from_ayat = int(match.group(1))
+        to_ayat = int(match.group(2))
+        print(f"📖 Ayat range extracted (no keyword): {from_ayat} to {to_ayat}")
+        return from_ayat, to_ayat
+    
+    return None, None
+
+
+# ============================================================
+# BAYAN INDEX EXTRACTION (First, Second, Third...)
+# ============================================================
+
+def extract_bayan_index(text: str) -> int:
+    """
+    Extract bayan index from text
+    Supports: "first", "second", "third", "pehla", "dosra", "tesra", etc.
+    Returns: 0-based index or None
+    """
+    if not text:
+        return None
+    
+    text = text.lower()
+    
+    for word, index in BAYAN_INDEX_MAP.items():
+        if word in text:
+            print(f"📖 Bayan index extracted: '{word}' → {index}")
+            return index
+    
+    return None
+
+
+# ============================================================
+# COMMAND MATCHING
+# ============================================================
+
+def match_command(text: str) -> str:
+    """
+    Match command text to action
+    Returns: action name or None
+    """
+    if not text:
+        return None
+    
+    text = text.lower().strip()
+    
+    for action, keywords in COMMANDS.items():
+        for keyword in keywords:
+            if keyword in text:
+                print(f"🎯 Command matched: '{keyword}' → {action}")
+                return action
+    
+    return None
+
+
+# ============================================================
+# TARGET MATCHING (Quran, Bayan, Home, Back, Chain, Bookmark)
+# ============================================================
+
+def match_target(text: str) -> str:
+    """
+    Match target category from text
+    Returns: target name or None
+    """
+    if not text:
+        return None
+    
+    text = text.lower().strip()
+    
+    for target, keywords in TARGETS.items():
+        for keyword in keywords:
+            if keyword in text:
+                print(f"🎯 Target matched: '{keyword}' → {target}")
+                return target
+    
+    return None
+
+
+# ============================================================
+# CHAIN NAME EXTRACTION
+# ============================================================
+
+def extract_chain_name(text: str) -> str:
+    """
+    Extract chain name from text
+    Supports: "play chain mychain", "chain sunao daily"
+    """
+    if not text:
+        return None
+    
+    text = text.lower().strip()
+    
+    # Pattern 1: "play chain daily"
+    match = re.search(r'(?:play|sunao|chalao)\s+chain\s+(\w+(?:\s+\w+)?)', text)
+    if match:
+        chain_name = match.group(1).strip()
+        print(f"📖 Chain name extracted: '{chain_name}'")
+        return chain_name
+    
+    # Pattern 2: "daily chain play"
+    match = re.search(r'(\w+(?:\s+\w+)?)\s+chain\s+(?:play|sunao|chalao)', text)
+    if match:
+        chain_name = match.group(1).strip()
+        print(f"📖 Chain name extracted (reverse): '{chain_name}'")
+        return chain_name
+    
+    return None
+
+
+# ============================================================
+# BOOKMARK TITLE EXTRACTION
+# ============================================================
+
+def extract_bookmark_title(text: str) -> str:
+    """
+    Extract custom bookmark title from text
+    Supports: "bookmark fatiha as my favorite"
+    """
+    if not text:
+        return None
+    
+    text = text.lower().strip()
+    
+    # Pattern: "bookmark fatiha as my favorite"
+    match = re.search(r'bookmark\s+([a-z]+)\s+as\s+(.+)', text)
+    if match:
+        surah_name = match.group(1)
+        title = match.group(2).strip()
+        full_title = f"{surah_name.capitalize()} - {title}"
+        print(f"📖 Bookmark title extracted: '{full_title}'")
+        return full_title
+    
+    return None
+
+
+# ============================================================
+# VALIDATE AND CLEAN TEXT
+# ============================================================
+
+def is_valid_command(text: str) -> bool:
+    """
+    Check if text contains any valid command
+    """
+    if not text:
+        return False
+    
+    text = text.lower().strip()
+    
+    for keywords in COMMANDS.values():
+        for keyword in keywords:
+            if keyword in text:
+                return True
+    
+    return False
+
+
+def clean_text(text: str) -> str:
+    """
+    Remove extra spaces, punctuation, and normalize
+    """
+    if not text:
+        return text
+    
+    # Remove extra spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove punctuation
+    text = re.sub(r'[^\w\s]', '', text)
+    
+    # Trim
+    text = text.strip()
+    
+    return text
+
+
+# ============================================================
+# COMPLETE VOICE COMMAND PARSING
+# ============================================================
+
+def parse_voice_command(text: str) -> dict:
+    """
+    Complete voice command parsing - one stop solution
+    Returns dict with all extracted information
+    """
+    if not text:
+        return None
+    
+    # Normalize and clean
+    original = text
+    text = normalize_text(text)
+    text = clean_text(text)
+    
+    result = {
+        "original": original,
+        "normalized": text,
+        "command": None,
+        "target": None,
+        "surah_id": None,
+        "surah_name": None,
+        "reciter_id": None,
+        "ayat_number": None,
+        "ayat_from": None,
+        "ayat_to": None,
+        "bayan_index": None,
+        "chain_name": None,
+        "bookmark_title": None,
+        "is_valid": False
+    }
+    
+    # Extract components
+    result["command"] = match_command(text)
+    result["target"] = match_target(text)
+    result["surah_id"] = find_surah_id(text)
+    result["reciter_id"] = find_reciter_id(text)
+    result["ayat_number"] = extract_ayat_number(text)
+    result["ayat_from"], result["ayat_to"] = extract_ayat_range(text)
+    result["bayan_index"] = extract_bayan_index(text)
+    result["chain_name"] = extract_chain_name(text)
+    result["bookmark_title"] = extract_bookmark_title(text)
+    result["is_valid"] = is_valid_command(text)
+    
+    # If ayat range found, override single ayat number
+    if result["ayat_from"] and result["ayat_to"]:
+        result["ayat_number"] = None
+    
+    return result
+
+
+# ============================================================
+# EXPORTS
+# ============================================================
+
+__all__ = [
+    'find_surah_id',
+    'find_reciter_id',
+    'extract_ayat_number',
+    'extract_ayat_range',
+    'extract_bayan_index',
+    'extract_chain_name',
+    'extract_bookmark_title',
+    'match_command',
+    'match_target',
+    'is_valid_command',
+    'clean_text',
+    'parse_voice_command',
+    'normalize_text',
+    'WHISPER_PROMPT',
+    'PLAYER_COMMANDS',
+    'SKIP_ACTIONS'
+]

@@ -7,18 +7,86 @@ router = APIRouter()
 BASE_AUDIO_URL = f"{BASE_IP}/audio/Al-Afasy/"
 
 # ============================================================
-# EXISTING ENDPOINT (by ID) - Already hai tumhare paas
+# EXISTING ENDPOINT (by ID) - BILKUL WAISA HI RAHEGA
 # ============================================================
 @router.get("/getChainDetails/{chainId}")
 def get_chain_details(chainId: int):
-    # ... tumhara existing code ...
-    pass
+    conn = get_connection()
+    if conn is None:
+        return {"message": "fail to build connection", "data": []}
+
+    try:
+        cursor = conn.cursor()
+        
+        # Original query (same as before)
+        query = """
+            SELECT 
+                cd.SurahID, 
+                s.NameEnglish, 
+                cd.StartAyat, 
+                cd.EndAyat, 
+                c.ReciterID
+            FROM dbo.ChainDetail cd
+            JOIN dbo.Chain c ON cd.ChainID = c.ChainID
+            JOIN dbo.Surah s ON cd.SurahID = s.SurahID
+            WHERE cd.ChainID = ?
+            ORDER BY cd.playOrder ASC
+        """
+        cursor.execute(query, (chainId,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            return {"message": "No details found for this chain", "data": []}
+
+        playlist = []
+
+        for row in rows:
+            s_id, s_name, start, end, r_id = row
+            
+            for ayat_num in range(start, end + 1):
+                ayat_query = """
+                    SELECT 
+                        a.arabicText, 
+                        a.translationUrdu, 
+                        aa.AudioURL 
+                    FROM ayat a
+                    LEFT JOIN ayataudio aa ON a.ayatID = aa.ayatID AND aa.reciterID = ?
+                    WHERE a.surahID = ? AND a.AyatNumber = ?
+                """
+                cursor.execute(ayat_query, (r_id, s_id, ayat_num))
+                res = cursor.fetchone()
+
+                if res:
+                    playlist.append({
+                        "surahId": s_id,
+                        "surahName": s_name,
+                        "ayatNumber": ayat_num,
+                        "ArabicText": res[0],
+                        "urduText": res[1],
+                        "audio": BASE_AUDIO_URL + res[2] if res[2] else None
+                    })
+
+        return {
+            "message": "Chain details fetched successfully",
+            "data": playlist
+        }
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {"message": "Internal Server Error", "error": str(e), "data": []}
+    finally:
+        conn.close()
+
 
 # ============================================================
-# 🆕 NEW ENDPOINT (by Name) - YEH ADD KARO
+# 🆕 NEW ENDPOINT (by Name) - SIRF YE ADD KARO
 # ============================================================
 @router.get("/getChainByName/{chainName}")
 def get_chain_by_name(chainName: str):
+    """
+    Get chain details by chain name
+    Example: /getChainByName/morning%20chain
+    """
     conn = get_connection()
     if conn is None:
         return {"message": "fail to build connection", "data": []}
@@ -56,7 +124,8 @@ def get_chain_by_name(chainName: str):
         chain_id = row[0]
         print(f"✅ Found chain ID: {chain_id} for name: '{decoded_name}'")
         
-        # Fetch chain details (same as existing logic)
+        # ✅ REUSE EXISTING LOGIC - Call same function as /getChainDetails
+        # Fetch chain details using the same query (copy from above or call function)
         query = """
             SELECT 
                 cd.SurahID, 
@@ -106,6 +175,8 @@ def get_chain_by_name(chainName: str):
 
         return {
             "message": "Chain details fetched successfully",
+            "chain_name": decoded_name,
+            "chain_id": chain_id,
             "data": playlist
         }
 
