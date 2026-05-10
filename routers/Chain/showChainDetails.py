@@ -7,7 +7,7 @@ router = APIRouter()
 BASE_AUDIO_URL = f"{BASE_IP}/audio/Al-Afasy/"
 
 # ============================================================
-# EXISTING ENDPOINT (by ID) - BILKUL WAISA HI RAHEGA
+# EXISTING ENDPOINT (by ID) 
 # ============================================================
 @router.get("/getChainDetails/{chainId}")
 def get_chain_details(chainId: int):
@@ -79,7 +79,7 @@ def get_chain_details(chainId: int):
 
 
 # ============================================================
-# 🆕 NEW ENDPOINT (by Name) - SIRF YE ADD KARO
+# 🆕 NEW ENDPOINT (by Name) 
 # ============================================================
 @router.get("/getChainByName/{chainName}")
 def get_chain_by_name(chainName: str):
