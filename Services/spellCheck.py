@@ -55,19 +55,57 @@ def find_surah_id(text: str) -> int:
             return SURAH_DB[key]
 
     # 4️⃣ Fuzzy fallback (for spelling mistakes)
-    # Use token_set_ratio for better partial matching
     best_match, score = process.extractOne(
         text,
         SURAH_DB.keys(),
         scorer=fuzz.token_set_ratio
     )
 
-    if score >= 70:  # 70% confidence threshold
+    if score >= 70:
         print(f"📖 Fuzzy Surah Detect: '{best_match}' (Score: {score}%) → ID: {SURAH_DB[best_match]}")
         return SURAH_DB[best_match]
     else:
         print(f"⚠️ No surah match found for: '{text}' (Best score: {score}%)")
 
+    return None
+
+
+# ============================================================
+# GET SURAH NAME FROM ID (NEW)
+# ============================================================
+
+def get_surah_name_from_id(surah_id: int) -> str:
+    """
+    Get surah name from ID
+    Returns: surah name or None
+    """
+    if not surah_id:
+        return None
+    
+    # Reverse lookup in SURAH_DB
+    for name, sid in SURAH_DB.items():
+        if sid == surah_id:
+            # Return capitalized name
+            return name.title()
+    
+    return None
+
+
+# ============================================================
+# GET SURAH NAME FROM TEXT (NEW - Most Important)
+# ============================================================
+
+def find_surah_name(text: str) -> str:
+    """
+    Find surah name from text (returns name, not ID)
+    """
+    if not text:
+        return None
+    
+    surah_id = find_surah_id(text)
+    if surah_id:
+        return get_surah_name_from_id(surah_id)
+    
     return None
 
 
@@ -122,7 +160,6 @@ def extract_ayat_number(text: str) -> int:
     if not text:
         return None
     
-    # First normalize text (handles aayat, ayah, etc.)
     text = normalize_text(text)
     
     # Pattern 1: "ayat 5" or "ayat 15"
@@ -132,13 +169,10 @@ def extract_ayat_number(text: str) -> int:
         print(f"📖 Ayat number extracted: {ayat_num}")
         return ayat_num
     
-    # Pattern 2: Single number without "ayat" word (but not if it's part of range)
-    # Check if it's a standalone number
+    # Pattern 2: Single number without "ayat" word
     match = re.search(r'\b(\d+)\b', text)
     if match:
-        # Make sure it's not part of a larger number sequence
         num = int(match.group(1))
-        # Avoid extracting numbers that are part of range (like 3 in "3 to 5")
         if not re.search(rf'{num}\s+(?:to|se)\s+\d+', text):
             print(f"📖 Standalone number extracted as ayat: {num}")
             return num
@@ -154,7 +188,6 @@ def extract_ayat_range(text: str) -> tuple:
     """
     Extract ayat range from text
     Returns: (from_ayat, to_ayat) or (None, None)
-    Supports: "ayat 3 to 8", "ayat 1 se 5", "3 to 8"
     """
     if not text:
         return None, None
@@ -181,7 +214,7 @@ def extract_ayat_range(text: str) -> tuple:
 
 
 # ============================================================
-# BAYAN INDEX EXTRACTION (First, Second, Third...)
+# BAYAN INDEX EXTRACTION
 # ============================================================
 
 def extract_bayan_index(text: str) -> int:
@@ -227,13 +260,12 @@ def match_command(text: str) -> str:
 
 
 # ============================================================
-# TARGET MATCHING (Quran, Bayan, Home, Back, Chain, Bookmark)
+# TARGET MATCHING
 # ============================================================
 
 def match_target(text: str) -> str:
     """
     Match target category from text
-    Returns: target name or None
     """
     if not text:
         return None
@@ -256,7 +288,6 @@ def match_target(text: str) -> str:
 def extract_chain_name(text: str) -> str:
     """
     Extract chain name from text
-    Supports: "play chain mychain", "chain sunao daily"
     """
     if not text:
         return None
@@ -287,14 +318,12 @@ def extract_chain_name(text: str) -> str:
 def extract_bookmark_title(text: str) -> str:
     """
     Extract custom bookmark title from text
-    Supports: "bookmark fatiha as my favorite"
     """
     if not text:
         return None
     
     text = text.lower().strip()
     
-    # Pattern: "bookmark fatiha as my favorite"
     match = re.search(r'bookmark\s+([a-z]+)\s+as\s+(.+)', text)
     if match:
         surah_name = match.group(1)
@@ -334,20 +363,15 @@ def clean_text(text: str) -> str:
     if not text:
         return text
     
-    # Remove extra spaces
     text = re.sub(r'\s+', ' ', text)
-    
-    # Remove punctuation
     text = re.sub(r'[^\w\s]', '', text)
-    
-    # Trim
     text = text.strip()
     
     return text
 
 
 # ============================================================
-# COMPLETE VOICE COMMAND PARSING
+# COMPLETE VOICE COMMAND PARSING (FIXED)
 # ============================================================
 
 def parse_voice_command(text: str) -> dict:
@@ -363,38 +387,37 @@ def parse_voice_command(text: str) -> dict:
     text = normalize_text(text)
     text = clean_text(text)
     
+    # Extract surah ID first
+    surah_id = find_surah_id(text)
+    surah_name = get_surah_name_from_id(surah_id) if surah_id else None
+    
     result = {
         "original": original,
         "normalized": text,
-        "command": None,
-        "target": None,
-        "surah_id": None,
-        "surah_name": None,
-        "reciter_id": None,
-        "ayat_number": None,
+        "command": match_command(text),
+        "target": match_target(text),
+        "surah_id": surah_id,
+        "surah_name": surah_name,           # 🔥 FIXED: Now will have value
+        "reciter_id": find_reciter_id(text),
+        "ayat_number": extract_ayat_number(text),
         "ayat_from": None,
         "ayat_to": None,
-        "bayan_index": None,
-        "chain_name": None,
-        "bookmark_title": None,
-        "is_valid": False
+        "bayan_index": extract_bayan_index(text),
+        "chain_name": extract_chain_name(text),
+        "bookmark_title": extract_bookmark_title(text),
+        "is_valid": is_valid_command(text)
     }
     
-    # Extract components
-    result["command"] = match_command(text)
-    result["target"] = match_target(text)
-    result["surah_id"] = find_surah_id(text)
-    result["reciter_id"] = find_reciter_id(text)
-    result["ayat_number"] = extract_ayat_number(text)
-    result["ayat_from"], result["ayat_to"] = extract_ayat_range(text)
-    result["bayan_index"] = extract_bayan_index(text)
-    result["chain_name"] = extract_chain_name(text)
-    result["bookmark_title"] = extract_bookmark_title(text)
-    result["is_valid"] = is_valid_command(text)
+    # Extract range
+    from_ayat, to_ayat = extract_ayat_range(text)
+    result["ayat_from"] = from_ayat
+    result["ayat_to"] = to_ayat
     
     # If ayat range found, override single ayat number
     if result["ayat_from"] and result["ayat_to"]:
         result["ayat_number"] = None
+    
+    print(f"📊 Parsed Result: surah_id={result['surah_id']}, surah_name={result['surah_name']}")
     
     return result
 
@@ -405,6 +428,8 @@ def parse_voice_command(text: str) -> dict:
 
 __all__ = [
     'find_surah_id',
+    'find_surah_name',           # NEW
+    'get_surah_name_from_id',    # NEW
     'find_reciter_id',
     'extract_ayat_number',
     'extract_ayat_range',

@@ -1,12 +1,13 @@
 # data.py - All Dictionaries for Voice Commands
 # Complete with all features: Chain, Bookmark, Bayan, Range Playback, Player Controls
+# FIXED: Added missing PLAYER_COMMANDS and SKIP_ACTIONS
 
 import re
 
 # ============================================================
 # SURAH DATABASE (114 Surahs with multiple spellings)
 # ============================================================
-
+# (Keep your existing SURAH_DB full 114 entries – omitted for brevity)
 SURAH_DB = {
     # 1–10
     "fatiha": 1, "al fatiha": 1, "fateha": 1, "fathia": 1,
@@ -149,7 +150,6 @@ SURAH_DB = {
 # ============================================================
 # RECITER DATABASE
 # ============================================================
-
 RECITER_DB = {
     "afasy": 1, "al afasy": 1, "mishary": 1, "mishari": 1, "mishary al afasy": 1,
     "sudais": 2, "abdul rahman al sudais": 2,
@@ -158,23 +158,16 @@ RECITER_DB = {
     "yassin": 5, "yaseen": 5, "sheikh yassin": 5
 }
 
-
 # ============================================================
 # COMMANDS DICTIONARY (All possible spellings)
 # ============================================================
-
 COMMANDS = {
-    # Playback Controls
     "play": ["play", "pley", "pla", "chalao", "sunao", "laga", "start", "continue", "shuru"],
     "pause": ["pause", "paws", "ruko", "band", "wait", "hold", "thairo", "rok", "thahro"],
     "stop": ["stop", "stap", "band kar", "rok do", "khatam", "close", "end", "khatam karo"],
     "resume": ["resume", "rizoom", "continue", "agey", "aage se", "phir se", "dobara", "jari rakho"],
-    
-    # Navigation
     "next": ["next", "nekst", "agla", "agli", "age", "aage", "forward", "skip", "aagay", "agla ayat", "next ayat"],
     "previous": ["previous", "preveyas", "pichla", "pichli", "back", "wapis", "peeche", "pichay", "return", "pichla ayat", "back ayat"],
-    
-    # Chain Commands
     "create_chain": ["create chain", "banao chain", "new chain", "nayi chain", "chain banao"],
     "select_surah": ["select surah", "choose surah", "surah select", "surah choose", "chuno surah"],
     "select_ayat": ["select ayat", "choose ayat", "ayat select", "ayat choose", "chuno ayat"],
@@ -184,41 +177,23 @@ COMMANDS = {
     "clear_all": ["clear all", "all clear", "sab hatao", "saf karo", "clear karo", "sab clear"],
     "show_list": ["show list", "list show", "list dikhao", "dikhao list", "kya hai"],
     "cancel_chain": ["cancel chain", "chain cancel", "cancel", "mansookh", "cancel karo"],
-    
-    # Bookmark Commands
     "bookmark_surah": ["bookmark surah", "surah bookmark", "nishan surah", "save surah"],
     "bookmark_ayat": ["bookmark ayat", "ayat bookmark", "nishan ayat", "save ayat"],
     "bookmark_range": ["bookmark range", "range bookmark", "nishan range", "save range"],
     "show_bookmarks": ["show bookmarks", "my bookmarks", "bookmarks dikhao", "mere nishan", "bookmark list"],
     "bookmark_with_title": ["bookmark as", "save as", "nishan as"],
-    
-    # Bayan Commands
-    "bayan": ["bayan", "bayaan", "baya", "beaan", "biyan", "bayn", "byan", "lecture", "taqreer"],
-    
-    # Ayat Commands
-    "ayat": ["ayat", "aayat", "ayah", "aya", "ayaat", "ayet", "ayath", "ayyat", "aiat","aayat","ayatt"],
-    
-    # Surah Commands
+    "bayan": ["bayan", "bayaan", "baya", "beaan", "biyan", "bayn", "byan","beyon","beyond"],
+    "ayat": ["ayat", "aayat", "ayah", "aya", "ayaat", "ayet", "ayath", "ayyat", "aiat", "ayatt"],
     "surah": ["surah", "sura", "sora", "sara", "chapter", "para"],
-    
-    # Jump/Go to
     "jump": ["jump", "jamp", "go to", "goto", "jao", "chalo", "le chalo", "lejao", "jump to"],
-    
-    # Open/Navigate
     "open": ["open", "kholo", "go to", "show", "le chalo", "dikhao"],
-    
-    # Read/Play
     "read": ["read", "reed", "parho", "tilawat", "text", "padho"],
-    
-    # Range Playback
     "play_range": ["play range", "range play", "ayat range"],
 }
-
 
 # ============================================================
 # BAYAN INDEX MAPPING (First, Second, Third, etc.)
 # ============================================================
-
 BAYAN_INDEX_MAP = {
     "first": 0, "pehla": 0, "1st": 0, "one": 0,
     "second": 1, "dosra": 1, "2nd": 1, "two": 1,
@@ -232,25 +207,21 @@ BAYAN_INDEX_MAP = {
     "tenth": 9, "10th": 9, "ten": 9,
 }
 
-
 # ============================================================
 # TARGETS (Categories for navigation)
 # ============================================================
-
 TARGETS = {
     "quran": ["quran", "mushaf", "qurane", "quran pak", "kuran"],
     "bayan": ["bayan", "bayanat", "lecture", "tafseer", "taqreer"],
     "home": ["home", "main screen", "ghar", "home screen", "start"],
     "back": ["back", "wapis", "peeche", "return", "pichay"],
     "chain": ["chain", "chains", "playlist", "list", "collection"],
-    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved"]
+    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved"],
 }
-
 
 # ============================================================
 # WHISPER PROMPT (For frontend speech recognition)
 # ============================================================
-
 WHISPER_PROMPT = (
     "quran, mushaf, surah, ayat, reciter, qari, mishary, sudais, "
     "play, chalao, sunao, start, pause, ruko, stop, "
@@ -258,7 +229,7 @@ WHISPER_PROMPT = (
     "open, kholo, go to, read, parho, "
     "bookmark, nishan, unmark, remove bookmark, "
     "save, mehfooz, store, "
-    "bayan, bayaan, lecture, tafseer, "
+    "bayan, bayaan, beyon, beyond,tafseer,bayern "
     "chain, playlist, create, banao, new, "
     "first, second, third, pehla, dosra, tesra, "
     "ayat, aayat, ayah, aya, ayaat, "
@@ -266,134 +237,125 @@ WHISPER_PROMPT = (
     "bookmark surah, bookmark ayat, show bookmarks"
 )
 
+# ============================================================
+# AYAT SPELLING VARIANTS (regex patterns with word boundaries)
+# ============================================================
+AYAT_PATTERNS = [
+    (re.compile(r'\b(?:aayat|ayah|aya|ayaat|ayet|ayath|ayyat|aiat|ayatt)\b', re.IGNORECASE), 'ayat')
+]
+
+BAYAN_PATTERNS = [
+    (re.compile(r'\b(?:bayaan|baya|beaan|biyan|bayn|byan|beyond|bian|beyon|bayern)\b', re.IGNORECASE), 'bayan')
+]
+
+COMMAND_PATTERNS = [
+    (re.compile(r'\b(?:chalao|sunao|laga)\b', re.IGNORECASE), 'play'),
+    (re.compile(r'\b(?:ruko|band|thairo)\b', re.IGNORECASE), 'pause'),
+    (re.compile(r'\b(?:band kar|rok do|khatam)\b', re.IGNORECASE), 'stop'),
+    (re.compile(r'\b(?:agla|agli|aage)\b', re.IGNORECASE), 'next'),
+    (re.compile(r'\b(?:pichla|pichli|wapis)\b', re.IGNORECASE), 'previous'),
+    (re.compile(r'\b(?:banao|bana do)\b', re.IGNORECASE), 'create'),
+    (re.compile(r'\b(?:mehfooz|bachao|rakho)\b', re.IGNORECASE), 'save'),
+    (re.compile(r'\b(?:nishan|mark)\b', re.IGNORECASE), 'bookmark'),
+    (re.compile(r'\b(?:kholo|dikhao)\b', re.IGNORECASE), 'open'),
+]
 
 # ============================================================
-# AYAT SPELLING VARIANTS
+# NUMBER WORDS TO DIGITS CONVERSION
 # ============================================================
-
-AYAT_VARIANTS = {
-    "aayat": "ayat", "ayah": "ayat", "aya": "ayat", 
-    "ayaat": "ayat", "ayet": "ayat", "ayath": "ayat", 
-    "ayyat": "ayat", "aiat": "ayat"
+NUMBER_WORDS = {
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4,
+    'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+    'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
+    'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
+    'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+    'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60,
+    'seventy': 70, 'eighty': 80, 'ninety': 90,
 }
 
+def convert_number_words_to_digits(text: str) -> str:
+    if not text:
+        return text
+    words = text.split()
+    converted = []
+    for w in words:
+        if w.lower() in NUMBER_WORDS:
+            converted.append(str(NUMBER_WORDS[w.lower()]))
+        else:
+            converted.append(w)
+    return ' '.join(converted)
 
 # ============================================================
-# COMMAND WORD REPLACEMENTS (Roman Urdu to English)
+# NORMALIZATION FUNCTION (word-boundary safe)
 # ============================================================
+def normalize_text(text: str) -> str:
+    """Complete text normalization using word-boundary replacements."""
+    if not text:
+        return text
 
-COMMAND_REPLACEMENTS = {
-    "chalao": "play", "sunao": "play", "laga": "play",
-    "ruko": "pause", "band": "pause", "thairo": "pause",
-    "band kar": "stop", "rok do": "stop", "khatam": "stop",
-    "agla": "next", "agli": "next", "aage": "next",
-    "pichla": "previous", "pichli": "previous", "wapis": "back",
-    "banao": "create", "bana do": "create",
-    "mehfooz": "save", "bachao": "save", "rakho": "save",
-    "nishan": "bookmark", "mark": "bookmark",
-    "kholo": "open", "dikhao": "show"
-}
+    original = text
+    text = text.lower().strip()
 
+    # 1. Convert number words to digits
+    text = convert_number_words_to_digits(text)
+
+    # 2. Replace BAYAN variants (whole words only)
+    for pattern, replacement in BAYAN_PATTERNS:
+        text = pattern.sub(replacement, text)
+
+    # 3. Replace AYAT variants (whole words only)
+    for pattern, replacement in AYAT_PATTERNS:
+        text = pattern.sub(replacement, text)
+
+    # 4. Replace command words (whole words only)
+    for pattern, replacement in COMMAND_PATTERNS:
+        text = pattern.sub(replacement, text)
+
+    if original != text:
+        print(f"📝 Normalized: '{original}' → '{text}'")
+
+    return text
 
 # ============================================================
-# BAYAN SPELLING VARIANTS
-# ============================================================
-
-BAYAN_VARIANTS = {
-    "bayaan": "bayan", "baya": "bayan", "beaan": "bayan",
-    "biyan": "bayan", "bayn": "bayan", "byan": "bayan"
-}
-
-
-# ============================================================
-# PLAYER COMMANDS LIST (for fast lookup)
+# ADD THE MISSING LISTS REQUIRED BY tokenCreate.py
 # ============================================================
 
 PLAYER_COMMANDS = ["play", "pause", "stop", "resume", "next", "previous", "jump"]
 
-
-# ============================================================
-# SKIP ACTIONS FOR SURAH DETECTION
-# ============================================================
-
 SKIP_ACTIONS = [
-    "select_surah", "select_ayat", "add_to_list", "set_title", "save_chain", 
-    "remove_last", "clear_all", "show_list", "cancel_chain", "open_chain_builder", 
-    "bookmark_surah", "bookmark_ayat", "bookmark_range", "bookmark_with_title", 
-    "show_bookmarks", "play_range", "play_chain", "next", "previous", "pause", 
+    "select_surah", "select_ayat", "add_to_list", "set_title", "save_chain",
+    "remove_last", "clear_all", "show_list", "cancel_chain", "open_chain_builder",
+    "bookmark_surah", "bookmark_ayat", "bookmark_range", "bookmark_with_title",
+    "show_bookmarks", "play_range", "play_chain", "next", "previous", "pause",
     "resume", "stop", "jump", "play"
 ]
 
-
 # ============================================================
-# NORMALIZATION FUNCTION
+# HELPER FUNCTIONS
 # ============================================================
-
-
-def normalize_text(text: str) -> str:
-    """Complete text normalization for voice commands"""
-    if not text:
-        return text
-    
-    original = text
-    text = text.lower().strip()
-    
-    # Normalize ayat spellings
-    for variant, standard in AYAT_VARIANTS.items():
-        if variant in text:
-            text = text.replace(variant, standard)
-    
-    # Normalize bayan spellings
-    for variant, standard in BAYAN_VARIANTS.items():
-        if variant in text:
-            text = text.replace(variant, standard)
-    
-    # Normalize Roman Urdu commands
-    for wrong, correct in COMMAND_REPLACEMENTS.items():
-        if wrong in text:
-            text = text.replace(wrong, correct)
-    
-    if original != text:
-        print(f"📝 Normalized: '{original}' → '{text}'")
-    
-    return text
-
-
-# ============================================================
-# HELPER FUNCTIONS FOR DATA ACCESS
-# ============================================================
-
 def get_surah_id(name: str) -> int:
-    """Get surah ID by name with fuzzy matching"""
     return SURAH_DB.get(name.lower(), None)
 
 def get_reciter_id(name: str) -> int:
-    """Get reciter ID by name"""
     return RECITER_DB.get(name.lower(), None)
 
 def get_bayan_index(word: str) -> int:
-    """Get bayan index from word (first, second, etc.)"""
     return BAYAN_INDEX_MAP.get(word.lower(), None)
-
 
 # ============================================================
 # EXPORTS (what other files can import)
 # ============================================================
-
 __all__ = [
     'SURAH_DB',
-    'RECITER_DB', 
+    'RECITER_DB',
     'COMMANDS',
     'BAYAN_INDEX_MAP',
     'TARGETS',
     'WHISPER_PROMPT',
-    'AYAT_VARIANTS',
-    'COMMAND_REPLACEMENTS',
-    'BAYAN_VARIANTS',
-    'PLAYER_COMMANDS',
-    'SKIP_ACTIONS',
     'normalize_text',
     'get_surah_id',
     'get_reciter_id',
-    'get_bayan_index'
+    'get_bayan_index',
+    'PLAYER_COMMANDS',
+    'SKIP_ACTIONS',
 ]
