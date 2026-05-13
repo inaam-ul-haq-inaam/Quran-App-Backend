@@ -14,6 +14,7 @@
 import re
 from typing import Any, Dict, Union, List
 from database import get_connection
+from config import BASE_IP
 
 # Import from data.py (single source of truth)
 from Services.data import (
@@ -59,6 +60,101 @@ def _add_surah_name(response: dict) -> dict:
             response['surahName'] = surah_name
     return response
 
+
+       # ============================================================
+       # HELPER: Get Bayan Details by Surah ID and Index
+       # ============================================================
+
+def get_Bayan_By_Surah(surah_id: int):
+    conn = get_connection()
+    if conn is None:
+        return {"Bayans": []}
+    
+    try:
+        cursor = conn.cursor()
+        
+        query = """SELECT 
+                    b.BayanID, 
+                    b.Title, 
+                    b.AudioURL, 
+                    b.Duration, 
+                    s.Name as ScholarName, 
+                    su.NameEnglish as SurahName, 
+                    b.StartAyatID, 
+                    b.EndAyatID
+                FROM Bayan b
+                LEFT JOIN Scholar s ON b.ScholarID = s.ScholarID
+                LEFT JOIN Surah su ON b.SurahID = su.SurahID
+                WHERE b.SurahID = ?
+                ORDER BY b.StartAyatID ASC"""
+        
+        cursor.execute(query, (surah_id,))
+        rows = cursor.fetchall()
+        
+        bayan_list = []
+        base_audio_url = f"{BASE_IP}/audio/Dr_Israr/" 
+
+        for row in rows:
+            bayan_list.append({
+                "BayanID": row[0],
+                "Title": row[1],
+                "AudioUrl": f"{base_audio_url}{row[2]}",
+                "Duration": row[3],
+                "ScholarName": row[4],
+                "SurahName": row[5],
+                "StartAyatID": row[6],
+                "EndAyatID": row[7]
+            })
+        
+        return {"Bayans": bayan_list}
+    
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return {"Bayans": []}
+    
+    finally:
+        conn.close()
+        
+ 
+def _get_bayan_details(surah_id: int, bayan_index: int = 0) -> dict:
+    """Fetch bayan title and URL by surah ID and index"""
+    if not surah_id:
+        return {"bayanTitle": None, "bayanUrl": None}
+    
+    try:
+        bayan_data = get_Bayan_By_Surah(surah_id)
+        
+        if bayan_data and bayan_data.get("Bayans"):
+            bayans = bayan_data["Bayans"]
+            if bayan_index < len(bayans):
+                bayan = bayans[bayan_index]
+                return {
+                    "bayanTitle": bayan.get("Title"),
+                    "bayanUrl": bayan.get("AudioUrl")
+                }
+        
+        return {"bayanTitle": None, "bayanUrl": None}
+        
+    except Exception as e:
+        print(f"❌ Error fetching bayan details: {e}")
+        return {"bayanTitle": None, "bayanUrl": None}
+
+
+def _add_bayan_details(response: dict) -> dict:
+    """Add bayanTitle and bayanUrl to response if type is 'bayan'"""
+    if response.get('type') == 'bayan' and response.get('surahId'):
+        bayan_details = _get_bayan_details(
+            response['surahId'], 
+            response.get('bayanIndex', 0)
+        )
+        response['bayanTitle'] = bayan_details.get('bayanTitle')
+        response['bayanUrl'] = bayan_details.get('bayanUrl')
+        print(f"🎤 Bayan Details: Title={response['bayanTitle']}, URL={response['bayanUrl']}")
+    return response
+
+
+
+
 def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     """
     Main function to convert voice text to command token.
@@ -87,6 +183,8 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         "surahName":None,
         "from": None,
         "to": None,
+        "bayanTitle":None,
+        "bayanUrl":None,
         "isVoiceMode": True
     }
 
@@ -184,6 +282,23 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["player"] = "cancel_chain"
         response["type"] = "chain"
         return response
+        
+        
+        # SECTION: DELETE CHAIN COMMANDS
+         # Pattern 1: "delete chain daily"
+    delete_chain_match = re.search(r"(?:delete|remove|hatao)\s+chain\s+(\w+(?:\s+\w+)?)", text)
+    if delete_chain_match:
+        chain_name = delete_chain_match.group(1).strip()
+        response["player"] = "delete_chain"
+        response["type"] = "chain"
+        response["chainName"] = chain_name
+        return response
+
+    # Pattern 2: "delete all chains"
+    if re.search(r"delete\s+all\s+chains", text) or re.search(r"sab\s+chains\s+hatao", text):
+        response["player"] = "delete_all_chains"
+        response["type"] = "chain"
+        return response
 
     # ------------------------------------------------------------------------
     # 4. BOOKMARK COMMANDS
@@ -259,6 +374,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["surahId"] = surah_id
             response["bayanIndex"] = bayan_index
             print(f"🎤 Bayan with index: {surah_name} → index {bayan_index}")
+            response = _add_bayan_details(response)
             return response
         else:
             print(f"❌ Surah not found: {surah_name}")
@@ -277,6 +393,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["surahId"] = surah_id
             response["bayanIndex"] = 0
             print(f"🎤 Bayan (first/default): {surah_name}")
+            response = _add_bayan_details(response)
             return response
         else:
             print(f"❌ Surah not found: {surah_name}")
@@ -289,6 +406,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["surahId"] = 0
         response["bayanIndex"] = 0
         print("🎤 Introduction bayan")
+        response = _add_bayan_details(response)
         return response
 
     # ------------------------------------------------------------------------
