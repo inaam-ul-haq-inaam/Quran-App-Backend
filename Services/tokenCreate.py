@@ -3,10 +3,10 @@
 # ============================================================================
 # Features:
 #   1. Quran Play (Full Surah, Single Ayat, Range)
-#   2. Chain Creation (Create, Select, Add, Save, Edit, Cancel)
+#   2. Chain Creation (Create, Select, Add, Save, Edit, Cancel, Delete)
 #   3. Chain Play (explicit "chain" word)
 #   4. Bookmark (Surah, Ayat, Range, Custom Title)
-#   5. Bayan Play (with First, Second, Third… support)
+#   5. Bayan Play (with First/Second/Third, and by Ayat Number)
 #   6. Player Controls (Play, Pause, Stop, Resume, Next, Previous, Jump)
 #   7. Next/Previous Surah Navigation
 # ============================================================================
@@ -27,10 +27,10 @@ from Services.data import (
 from Services.spellCheck import find_surah_id
 
 
+# ============================================================================
+# SECTION A: HELPER FUNCTIONS FOR SURAH
+# ============================================================================
 
-# ============================================================
-# HELPER: Get Surah Name from Database
-# ============================================================
 def _get_surah_name(surah_id: int) -> str:
     """Fetch surah name from database by surah ID"""
     if not surah_id:
@@ -61,14 +61,18 @@ def _add_surah_name(response: dict) -> dict:
     return response
 
 
-       # ============================================================
-       # HELPER: Get Bayan Details by Surah ID and Index
-       # ============================================================
+# ============================================================================
+# SECTION B: HELPER FUNCTIONS FOR BAYAN
+# ============================================================================
 
-def get_Bayan_By_Surah(surah_id: int):
+def _get_bayans_by_surah(surah_id: int) -> list:
+    """Fetch all bayans for a surah directly from database"""
+    if not surah_id:
+        return []
+    
     conn = get_connection()
     if conn is None:
-        return {"Bayans": []}
+        return []
     
     try:
         cursor = conn.cursor()
@@ -77,89 +81,119 @@ def get_Bayan_By_Surah(surah_id: int):
                     b.BayanID, 
                     b.Title, 
                     b.AudioURL, 
-                    b.Duration, 
-                    s.Name as ScholarName, 
-                    su.NameEnglish as SurahName, 
                     b.StartAyatID, 
                     b.EndAyatID
                 FROM Bayan b
-                LEFT JOIN Scholar s ON b.ScholarID = s.ScholarID
-                LEFT JOIN Surah su ON b.SurahID = su.SurahID
                 WHERE b.SurahID = ?
                 ORDER BY b.StartAyatID ASC"""
         
         cursor.execute(query, (surah_id,))
         rows = cursor.fetchall()
         
-        bayan_list = []
-        base_audio_url = f"{BASE_IP}/audio/Dr_Israr/" 
-
+        bayans = []
+        base_audio_url = f"{BASE_IP}/audio/Dr_Israr/"
+        
         for row in rows:
-            bayan_list.append({
-                "BayanID": row[0],
-                "Title": row[1],
-                "AudioUrl": f"{base_audio_url}{row[2]}",
-                "Duration": row[3],
-                "ScholarName": row[4],
-                "SurahName": row[5],
-                "StartAyatID": row[6],
-                "EndAyatID": row[7]
+            bayans.append({
+                "bayanId": row[0],
+                "title": row[1],
+                "audioUrl": f"{base_audio_url}{row[2]}",
+                "startAyat": row[3],
+                "endAyat": row[4]
             })
         
-        return {"Bayans": bayan_list}
-    
+        return bayans
+        
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return {"Bayans": []}
-    
+        print(f"❌ Error fetching bayans: {e}")
+        return []
     finally:
         conn.close()
-        
- 
-def _get_bayan_details(surah_id: int, bayan_index: int = 0) -> dict:
-    """Fetch bayan title and URL by surah ID and index"""
-    if not surah_id:
-        return {"bayanTitle": None, "bayanUrl": None}
+
+
+def _find_bayan_by_ayat(surah_id: int, ayat_number: int) -> dict:
+    """Find which bayan contains the given ayat number"""
+    if not surah_id or not ayat_number:
+        return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
     
-    try:
-        bayan_data = get_Bayan_By_Surah(surah_id)
+    bayans = _get_bayans_by_surah(surah_id)
+    
+    if not bayans:
+        return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
+    
+    for idx, bayan in enumerate(bayans):
+        start_ayat = bayan.get("startAyat")
+        end_ayat = bayan.get("endAyat")
         
-        if bayan_data and bayan_data.get("Bayans"):
-            bayans = bayan_data["Bayans"]
-            if bayan_index < len(bayans):
-                bayan = bayans[bayan_index]
+        # Check if ayat falls in this bayan's range
+        if start_ayat and end_ayat:
+            if start_ayat <= ayat_number <= end_ayat:
                 return {
-                    "bayanTitle": bayan.get("Title"),
-                    "bayanUrl": bayan.get("AudioUrl")
+                    "bayanIndex": idx,
+                    "bayanTitle": bayan.get("title"),
+                    "bayanUrl": bayan.get("audioUrl"),
+                    "bayanId": bayan.get("bayanId"),
+                    "startAyat": start_ayat,
+                    "endAyat": end_ayat
                 }
-        
-        return {"bayanTitle": None, "bayanUrl": None}
-        
-    except Exception as e:
-        print(f"❌ Error fetching bayan details: {e}")
-        return {"bayanTitle": None, "bayanUrl": None}
+    
+    # If no range found, return first bayan as fallback
+    return {
+        "bayanIndex": 0,
+        "bayanTitle": bayans[0].get("title"),
+        "bayanUrl": bayans[0].get("audioUrl"),
+        "bayanId": bayans[0].get("bayanId"),
+        "startAyat": bayans[0].get("startAyat"),
+        "endAyat": bayans[0].get("endAyat")
+    }
+
+
+def _get_bayan_by_index(surah_id: int, bayan_index: int = 0) -> dict:
+    """Fetch bayan by surah ID and index"""
+    bayans = _get_bayans_by_surah(surah_id)
+    
+    if bayans and bayan_index < len(bayans):
+        bayan = bayans[bayan_index]
+        return {
+            "bayanTitle": bayan.get("title"),
+            "bayanUrl": bayan.get("audioUrl"),
+            "bayanId": bayan.get("bayanId")
+        }
+    
+    return {"bayanTitle": None, "bayanUrl": None, "bayanId": None}
 
 
 def _add_bayan_details(response: dict) -> dict:
     """Add bayanTitle and bayanUrl to response if type is 'bayan'"""
     if response.get('type') == 'bayan' and response.get('surahId'):
-        bayan_details = _get_bayan_details(
-            response['surahId'], 
-            response.get('bayanIndex', 0)
-        )
-        response['bayanTitle'] = bayan_details.get('bayanTitle')
-        response['bayanUrl'] = bayan_details.get('bayanUrl')
-        print(f"🎤 Bayan Details: Title={response['bayanTitle']}, URL={response['bayanUrl']}")
+        # Check if we have specific ayat number
+        if response.get('requestedAyat'):
+            bayan_info = _find_bayan_by_ayat(response['surahId'], response['requestedAyat'])
+            response['bayanIndex'] = bayan_info.get('bayanIndex')
+            response['bayanTitle'] = bayan_info.get('bayanTitle')
+            response['bayanUrl'] = bayan_info.get('bayanUrl')
+            response['bayanRange'] = f"{bayan_info.get('startAyat')}-{bayan_info.get('endAyat')}"
+        else:
+            # Normal bayan by index
+            bayan_info = _get_bayan_by_index(response['surahId'], response.get('bayanIndex', 0))
+            response['bayanTitle'] = bayan_info.get('bayanTitle')
+            response['bayanUrl'] = bayan_info.get('bayanUrl')
+        
+        print(f"🎤 Bayan Details: Title={response.get('bayanTitle')}, URL={response.get('bayanUrl')}")
+    
     return response
 
 
-
+# ============================================================================
+# SECTION C: MAIN TOKEN CREATOR FUNCTION
+# ============================================================================
 
 def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     """
     Main function to convert voice text to command token.
     Returns a dictionary with player action and all necessary data.
     """
+    
     # ------------------------------------------------------------------------
     # 1. INPUT NORMALIZATION
     # ------------------------------------------------------------------------
@@ -172,25 +206,27 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     text = str(text).strip().lower()
 
     original_text = text
-    text = normalize_text(text)                     # handles spelling, number words, etc.
+    text = normalize_text(text)
     if original_text != text:
         print(f"📝 Text normalized: '{original_text}' → '{text}'")
 
     response: Dict[str, Any] = {
-        "player": None,       # Action to perform
-        "type": "surah",      # surah / chain / bookmark / bayan
+        "player": None,
+        "type": "surah",
         "surah": None,
-        "surahName":None,
+        "surahName": None,
         "from": None,
         "to": None,
-        "bayanTitle":None,
-        "bayanUrl":None,
+        "bayanTitle": None,
+        "bayanUrl": None,
         "isVoiceMode": True
     }
+
 
     # ------------------------------------------------------------------------
     # 2. SELECT COMMANDS (HIGHEST PRIORITY – for chain building)
     # ------------------------------------------------------------------------
+    
     # 2.1 "select surah ..."
     if re.search(r"select\s+surah", text) or re.search(r"surah\s+select", text):
         surah_match = re.search(r"(?:select\s+)?surah\s+([a-z]+)", text)
@@ -233,19 +269,24 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"🎯 Select single ayat: {response['fromAyat']}")
             return response
 
+
     # ------------------------------------------------------------------------
     # 3. CHAIN CREATION COMMANDS
     # ------------------------------------------------------------------------
+    
+    # 3.1 Open chain builder
     if re.search(r"create\s+chain", text):
         response["player"] = "open_chain_builder"
         response["type"] = "chain"
         return response
 
+    # 3.2 Add to list
     if re.search(r"add\s+to\s+list", text) or re.search(r"add\s+kar", text):
         response["player"] = "add_to_list"
         response["type"] = "chain"
         return response
 
+    # 3.3 Set title
     title_match = re.search(r"(?:title|name|set title)\s+(.+?)(?:\s+chain)?$", text)
     if not title_match:
         title_match = re.search(r"naam\s+(.+)", text)
@@ -258,34 +299,37 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["title"] = title
             return response
 
+    # 3.4 Save chain
     if re.search(r"save\s+chain", text):
         response["player"] = "save_chain"
         response["type"] = "chain"
         return response
 
+    # 3.5 Remove last
     if re.search(r"remove\s+last", text) or re.search(r"last\s+hatayo", text):
         response["player"] = "remove_last"
         response["type"] = "chain"
         return response
 
+    # 3.6 Clear all
     if re.search(r"clear\s+all", text) or re.search(r"sab\s+hatayo", text):
         response["player"] = "clear_all"
         response["type"] = "chain"
         return response
 
+    # 3.7 Show list
     if re.search(r"show\s+list", text) or re.search(r"list\s+dikhao", text):
         response["player"] = "show_list"
         response["type"] = "chain"
         return response
 
+    # 3.8 Cancel chain
     if re.search(r"cancel\s+chain", text) or re.search(r"chain\s+cancel", text):
         response["player"] = "cancel_chain"
         response["type"] = "chain"
         return response
         
-        
-        # SECTION: DELETE CHAIN COMMANDS
-         # Pattern 1: "delete chain daily"
+    # 3.9 Delete chain
     delete_chain_match = re.search(r"(?:delete|remove|hatao)\s+chain\s+(\w+(?:\s+\w+)?)", text)
     if delete_chain_match:
         chain_name = delete_chain_match.group(1).strip()
@@ -294,15 +338,18 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["chainName"] = chain_name
         return response
 
-    # Pattern 2: "delete all chains"
+    # 3.10 Delete all chains
     if re.search(r"delete\s+all\s+chains", text) or re.search(r"sab\s+chains\s+hatao", text):
         response["player"] = "delete_all_chains"
         response["type"] = "chain"
         return response
 
+
     # ------------------------------------------------------------------------
     # 4. BOOKMARK COMMANDS
     # ------------------------------------------------------------------------
+    
+    # 4.1 Bookmark full surah
     surah_bookmark_match = re.search(r"bookmark\s+([a-z]+)(?:\s+ayat)?$", text)
     if surah_bookmark_match and "ayat" not in text:
         response["player"] = "bookmark_surah"
@@ -310,6 +357,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["surahName"] = surah_bookmark_match.group(1)
         return response
 
+    # 4.2 Bookmark specific ayat
     ayat_bookmark_match = re.search(r"bookmark\s+([a-z]+)\s+ayat\s+(\d+)", text)
     if ayat_bookmark_match:
         response["player"] = "bookmark_ayat"
@@ -318,6 +366,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["fromAyat"] = int(ayat_bookmark_match.group(2))
         return response
 
+    # 4.3 Bookmark range
     range_bookmark_match = re.search(
         r"bookmark\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text
     )
@@ -333,6 +382,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["toAyat"] = int(range_bookmark_match.group(3))
         return response
 
+    # 4.4 Bookmark with custom title
     title_bookmark = re.search(r"bookmark\s+([a-z]+)\s+as\s+(.+)", text)
     if title_bookmark:
         response["player"] = "bookmark_with_title"
@@ -341,17 +391,48 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["title"] = title_bookmark.group(2).strip()
         return response
 
+    # 4.5 Show bookmarks list
     if re.search(r"(?:show|my)\s+bookmarks", text):
         response["player"] = "show_bookmarks"
         response["type"] = "bookmark"
         return response
 
+
     # ------------------------------------------------------------------------
-    # 5. BAYAN COMMANDS (with first/second/… index)
+    # 5. BAYAN COMMANDS
     # ------------------------------------------------------------------------
+    
     BAYAN_KEYWORDS = ["bayan", "tafseer", "tafsir", "tarjuma", "explanation", "lecture"]
 
-    # 5.1 bayan with explicit index
+    # 5.0 Bayan by Ayat Number (NEW - Highest priority)
+    bayan_by_ayat = re.search(
+        r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)\s+ayat\s+(\d+)", 
+        text
+    )
+    
+    if bayan_by_ayat:
+        surah_name = bayan_by_ayat.group(1)
+        ayat_number = int(bayan_by_ayat.group(2))
+        surah_id = find_surah_id(surah_name)
+        
+        if surah_id:
+            response["player"] = "play"
+            response["type"] = "bayan"
+            response["surahId"] = surah_id
+            response["requestedAyat"] = ayat_number
+            response = _add_bayan_details(response)
+            
+            if response.get('bayanTitle'):
+                print(f"🎤 Bayan by ayat: {surah_name} ayat {ayat_number} → {response['bayanTitle']}")
+            else:
+                print(f"❌ No bayan found for surah {surah_name} containing ayat {ayat_number}")
+            
+            return response
+        else:
+            print(f"❌ Surah not found: {surah_name}")
+            return response
+
+    # 5.1 Bayan with explicit index (first, second, third...)
     bayan_with_index = re.search(
         r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)\s+"
         r"(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|"
@@ -380,7 +461,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"❌ Surah not found: {surah_name}")
             return response
 
-    # 5.2 simple bayan (first by default)
+    # 5.2 Simple bayan (first by default)
     bayan_match = re.search(r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)", text)
     if not bayan_match:
         bayan_match = re.search(r"bayan\s+(?:play|sunao|chalao)\s+([a-z]+)", text)
@@ -399,19 +480,23 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"❌ Surah not found: {surah_name}")
             return response
 
-    # 5.3 introduction bayan
+    # 5.3 Introduction bayan
     if re.search(r"introduction\s+to\s+quran", text) or re.search(r"intro\s+bayan", text):
         response["player"] = "play"
         response["type"] = "bayan"
         response["surahId"] = 0
         response["bayanIndex"] = 0
+        response["bayanTitle"] = "Introduction to Quran"
+        response["bayanUrl"] = f"{BASE_IP}/audio/Dr_Israr/intro.mp3"
         print("🎤 Introduction bayan")
-        response = _add_bayan_details(response)
         return response
+
 
     # ------------------------------------------------------------------------
     # 6. CHAIN PLAY (explicit "chain" word)
     # ------------------------------------------------------------------------
+    
+    # 6.1 "play chain daily"
     play_chain_match = re.search(r"(?:play|sunao|chalao)\s+chain\s+(\w+(?:\s+\w+)?)", text)
     if play_chain_match:
         response["player"] = "play_chain"
@@ -419,6 +504,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["chainName"] = play_chain_match.group(1).strip()
         return response
 
+    # 6.2 "daily chain play"
     alt_match = re.search(r"(\w+(?:\s+\w+)?)\s+chain\s+(?:play|sunao|chalao)", text)
     if alt_match:
         response["player"] = "play_chain"
@@ -426,10 +512,12 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["chainName"] = alt_match.group(1).strip()
         return response
 
+
     # ------------------------------------------------------------------------
-    # 7. QURAN PLAYBACK (full surah / single ayat / range – 5 patterns)
+    # 7. QURAN PLAYBACK (Full Surah, Single Ayat, Range – 5 patterns)
     # ------------------------------------------------------------------------
-    # pattern 1: "play fatiha from ayat 2"  → from 2 to end
+    
+    # Pattern 1: "play fatiha from ayat 2" → from 2 to end
     pattern1 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)", text)
     if pattern1:
         surah_name = pattern1.group(1)
@@ -445,7 +533,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_surah_name(response)
             return response
 
-    # pattern 2: "play fatiha from ayat 1 to 5"  → specific range
+    # Pattern 2: "play fatiha from ayat 1 to 5" → specific range
     pattern2 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text)
     if not pattern2:
         pattern2 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)\s+to\s+(\d+)", text)
@@ -464,7 +552,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_surah_name(response)
             return response
 
-    # pattern 3: "play fatiha ayat 3"  → single ayat
+    # Pattern 3: "play fatiha ayat 3" → single ayat
     pattern3 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)", text)
     if pattern3:
         surah_name = pattern3.group(1)
@@ -480,7 +568,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_surah_name(response)
             return response
 
-    # pattern 4: "play fatiha to ayat 5"  → from 1 to 5
+    # Pattern 4: "play fatiha to ayat 5" → from 1 to 5
     pattern4 = re.search(r"play\s+([a-z]+)\s+to\s+ayat\s+(\d+)", text)
     if not pattern4:
         pattern4 = re.search(r"play\s+([a-z]+)\s+tak\s+ayat\s+(\d+)", text)
@@ -498,7 +586,7 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_surah_name(response)
             return response
 
-    # pattern 5: "play fatiha"  → full surah
+    # Pattern 5: "play fatiha" → full surah
     pattern5 = re.search(r"play\s+([a-z]+)$", text)
     if pattern5:
         surah_name = pattern5.group(1)
@@ -513,24 +601,30 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_surah_name(response)
             return response
 
+
     # ------------------------------------------------------------------------
     # 8. NEXT / PREVIOUS SURAH NAVIGATION
     # ------------------------------------------------------------------------
+    
+    # 8.1 Next surah
     if re.search(r"(?:next|agla|agli|aage)\s+surah", text) or re.search(r"surah\s+(?:next|agla)", text):
         response["player"] = "next_surah"
         response["type"] = "surah"
         print("🎯 Next surah command")
         return response
 
+    # 8.2 Previous surah
     if re.search(r"(?:previous|pichla|pichli|peeche)\s+surah", text) or re.search(r"surah\s+(?:previous|pichla)", text):
         response["player"] = "previous_surah"
         response["type"] = "surah"
         print("🎯 Previous surah command")
         return response
 
+
     # ------------------------------------------------------------------------
-    # 9. STANDARD PLAYER CONTROLS (play, pause, stop, resume, next, previous, jump)
+    # 9. STANDARD PLAYER CONTROLS
     # ------------------------------------------------------------------------
+    
     if response["player"] is None:
         for action, keywords in COMMANDS.items():
             if action in PLAYER_COMMANDS:
@@ -540,20 +634,25 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
                     print(f"🎯 Matched command: {action}")
                     break
 
+
     # ------------------------------------------------------------------------
-    # 10. FALLBACK SURAH DETECTION (if no explicit command)
+    # 10. FALLBACK SURAH DETECTION
     # ------------------------------------------------------------------------
+    
     if response["player"] not in SKIP_ACTIONS and response["player"] is None:
         text_for_surah = text
-        # remove command words
+        
+        # Remove command words
         for action, keywords in COMMANDS.items():
             if action in PLAYER_COMMANDS:
                 for word in keywords:
                     text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
-        # remove common noise words
+        
+        # Remove common noise words
         remove_words = ["bayan", "tafseer", "from", "to", "se", "tak", "ayat", "verse", "aayat", "ayah", "select"]
         for word in remove_words:
             text_for_surah = re.sub(rf"\b{re.escape(word)}\b", "", text_for_surah)
+        
         text_for_surah = re.sub(r"\b\d+\b", "", text_for_surah).strip()
 
         if len(text_for_surah) >= 3:
@@ -566,9 +665,11 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
                 response["to"] = None
                 print(f"🎯 Quran detected via fallback: {text_for_surah}")
 
+
     # ------------------------------------------------------------------------
     # 11. NUMBERS EXTRACTION (for jump or range)
     # ------------------------------------------------------------------------
+    
     numbers = [int(n) for n in re.findall(r"\b\d+\b", text)]
     if response["player"] == "jump" and len(numbers) >= 1:
         response["ayatNumber"] = numbers[0]
@@ -577,9 +678,9 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     if len(numbers) >= 2 and not response.get("to"):
         response["to"] = numbers[1]
 
+
     # ------------------------------------------------------------------------
     # 12. FINAL RETURN
     # ------------------------------------------------------------------------
     
-
     return response
