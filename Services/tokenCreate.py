@@ -77,6 +77,7 @@ def _get_bayans_by_surah(surah_id: int) -> list:
     try:
         cursor = conn.cursor()
         
+        # 🔥 FIX: Only include bayans with valid StartAyatID and EndAyatID
         query = """SELECT 
                     b.BayanID, 
                     b.Title, 
@@ -85,6 +86,8 @@ def _get_bayans_by_surah(surah_id: int) -> list:
                     b.EndAyatID
                 FROM Bayan b
                 WHERE b.SurahID = ?
+                    AND b.StartAyatID IS NOT NULL
+                    AND b.EndAyatID IS NOT NULL
                 ORDER BY b.StartAyatID ASC"""
         
         cursor.execute(query, (surah_id,))
@@ -102,6 +105,11 @@ def _get_bayans_by_surah(surah_id: int) -> list:
                 "endAyat": row[4]
             })
         
+        # Debug logs
+        print(f"📖 Found {len(bayans)} bayans for surah {surah_id}")
+        for idx, b in enumerate(bayans):
+            print(f"   [{idx}] {b['title']}: Ayats {b['startAyat']}-{b['endAyat']}")
+        
         return bayans
         
     except Exception as e:
@@ -114,20 +122,27 @@ def _get_bayans_by_surah(surah_id: int) -> list:
 def _find_bayan_by_ayat(surah_id: int, ayat_number: int) -> dict:
     """Find which bayan contains the given ayat number"""
     if not surah_id or not ayat_number:
+        print(f"⚠️ Invalid input: surah_id={surah_id}, ayat_number={ayat_number}")
         return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
+    
+    print(f"🔍 Searching for ayat {ayat_number} in surah {surah_id}")
     
     bayans = _get_bayans_by_surah(surah_id)
     
     if not bayans:
+        print(f"❌ No bayans found for surah {surah_id}")
         return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
     
     for idx, bayan in enumerate(bayans):
         start_ayat = bayan.get("startAyat")
         end_ayat = bayan.get("endAyat")
         
+        print(f"   Checking bayan [{idx}]: {bayan.get('title')} -> Ayats {start_ayat}-{end_ayat}")
+        
         # Check if ayat falls in this bayan's range
         if start_ayat and end_ayat:
             if start_ayat <= ayat_number <= end_ayat:
+                print(f"   ✅ MATCH FOUND! Index {idx}")
                 return {
                     "bayanIndex": idx,
                     "bayanTitle": bayan.get("title"),
@@ -136,8 +151,11 @@ def _find_bayan_by_ayat(surah_id: int, ayat_number: int) -> dict:
                     "startAyat": start_ayat,
                     "endAyat": end_ayat
                 }
+        else:
+            print(f"   ⚠️ Invalid range: start={start_ayat}, end={end_ayat}")
     
     # If no range found, return first bayan as fallback
+    print(f"⚠️ No bayan contains ayat {ayat_number}, returning first bayan (index 0) as fallback")
     return {
         "bayanIndex": 0,
         "bayanTitle": bayans[0].get("title"),
@@ -154,20 +172,25 @@ def _get_bayan_by_index(surah_id: int, bayan_index: int = 0) -> dict:
     
     if bayans and bayan_index < len(bayans):
         bayan = bayans[bayan_index]
+        print(f"📖 Getting bayan by index {bayan_index}: {bayan.get('title')}")
         return {
             "bayanTitle": bayan.get("title"),
             "bayanUrl": bayan.get("audioUrl"),
             "bayanId": bayan.get("bayanId")
         }
     
+    print(f"⚠️ Bayan index {bayan_index} not found, total bayans: {len(bayans)}")
     return {"bayanTitle": None, "bayanUrl": None, "bayanId": None}
 
 
 def _add_bayan_details(response: dict) -> dict:
     """Add bayanTitle and bayanUrl to response if type is 'bayan'"""
     if response.get('type') == 'bayan' and response.get('surahId'):
+        print(f"🎤 Adding bayan details for surahId={response['surahId']}")
+        
         # Check if we have specific ayat number
         if response.get('requestedAyat'):
+            print(f"   Mode: By Ayat Number ({response['requestedAyat']})")
             bayan_info = _find_bayan_by_ayat(response['surahId'], response['requestedAyat'])
             response['bayanIndex'] = bayan_info.get('bayanIndex')
             response['bayanTitle'] = bayan_info.get('bayanTitle')
@@ -175,11 +198,13 @@ def _add_bayan_details(response: dict) -> dict:
             response['bayanRange'] = f"{bayan_info.get('startAyat')}-{bayan_info.get('endAyat')}"
         else:
             # Normal bayan by index
+            print(f"   Mode: By Index ({response.get('bayanIndex', 0)})")
             bayan_info = _get_bayan_by_index(response['surahId'], response.get('bayanIndex', 0))
             response['bayanTitle'] = bayan_info.get('bayanTitle')
             response['bayanUrl'] = bayan_info.get('bayanUrl')
         
         print(f"🎤 Bayan Details: Title={response.get('bayanTitle')}, URL={response.get('bayanUrl')}")
+        print(f"🎤 Bayan Index: {response.get('bayanIndex')}, Range: {response.get('bayanRange')}")
     
     return response
 
@@ -404,16 +429,18 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     
     BAYAN_KEYWORDS = ["bayan", "tafseer", "tafsir", "tarjuma", "explanation", "lecture"]
 
-    # 5.0 Bayan by Ayat Number (NEW - Highest priority)
+    # 5.0 Bayan by Ayat Number (Highest priority)
     bayan_by_ayat = re.search(
         r"(?:play|sunao|chalao)\s+bayan\s+([a-z]+)\s+ayat\s+(\d+)", 
         text
     )
-    
+
     if bayan_by_ayat:
         surah_name = bayan_by_ayat.group(1)
         ayat_number = int(bayan_by_ayat.group(2))
         surah_id = find_surah_id(surah_name)
+        
+        print(f"🎤 Bayan by ayat detected: surah={surah_name}, ayat={ayat_number}, surah_id={surah_id}")
         
         if surah_id:
             response["player"] = "play"
@@ -423,10 +450,10 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response = _add_bayan_details(response)
             
             if response.get('bayanTitle'):
-                print(f"🎤 Bayan by ayat: {surah_name} ayat {ayat_number} → {response['bayanTitle']}")
+                print(f"🎤 Bayan by ayat: {surah_name} ayat {ayat_number} → {response['bayanTitle']} (Index {response.get('bayanIndex')})")
             else:
                 print(f"❌ No bayan found for surah {surah_name} containing ayat {ayat_number}")
-            
+                
             return response
         else:
             print(f"❌ Surah not found: {surah_name}")
