@@ -272,11 +272,11 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["surahName"] = surah_name
             print(f"🎯 Select surah (simple): {surah_name}")
             return response
-
-    # 2.3 select ayat (range or single)
+        
+        # 2.3 select ayat (range or single)
     if re.search(r"select\s+ayat", text) or re.search(r"ayat\s+select", text):
-        # range first
-        range_match = re.search(r"(?:select\s+)?ayat\s+(\d+)\s+(?:to|se)\s+(\d+)", text)
+    # range first: "select ayat 1 to 8" or "select ayat 1 sa 8"
+        range_match = re.search(r"(?:select\s+)?ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+(\d+)", text)
         if range_match:
             response["player"] = "select_ayat"
             response["type"] = "chain"
@@ -393,12 +393,12 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
 
     # 4.3 Bookmark range
     range_bookmark_match = re.search(
-        r"bookmark\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text
+    r"bookmark\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+ayat\s+(\d+)", text
     )
     if not range_bookmark_match:
-        range_bookmark_match = re.search(
-            r"bookmark\s+([a-z]+)\s+ayat\s+(\d+)\s+(?:to|se)\s+(\d+)", text
-        )
+      range_bookmark_match = re.search(
+         r"bookmark\s+([a-z]+)\s+ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+(\d+)", text
+      )
     if range_bookmark_match:
         response["player"] = "bookmark_range"
         response["type"] = "bookmark"
@@ -561,9 +561,10 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             return response
 
     # Pattern 2: "play fatiha from ayat 1 to 5" → specific range
-    pattern2 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+to\s+ayat\s+(\d+)", text)
+    pattern2 = re.search(r"play\s+([a-z]+)\s+from\s+ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+ayat\s+(\d+)", text)
     if not pattern2:
-        pattern2 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)\s+to\s+(\d+)", text)
+       pattern2 = re.search(r"play\s+([a-z]+)\s+ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+(\d+)", text)
+
     if pattern2:
         surah_name = pattern2.group(1)
         from_ayat = int(pattern2.group(2))
@@ -596,9 +597,10 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             return response
 
     # Pattern 4: "play fatiha to ayat 5" → from 1 to 5
-    pattern4 = re.search(r"play\s+([a-z]+)\s+to\s+ayat\s+(\d+)", text)
+    pattern4 = re.search(r"play\s+([a-z]+)\s+(?:to|se|sa|sy|say)\s+ayat\s+(\d+)", text)
     if not pattern4:
-        pattern4 = re.search(r"play\s+([a-z]+)\s+tak\s+ayat\s+(\d+)", text)
+       pattern4 = re.search(r"play\s+([a-z]+)\s+tak\s+ayat\s+(\d+)", text)
+
     if pattern4:
         surah_name = pattern4.group(1)
         to_ayat = int(pattern4.group(2))
