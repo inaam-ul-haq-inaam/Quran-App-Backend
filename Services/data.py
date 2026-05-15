@@ -146,6 +146,20 @@ SURAH_DB = {
     "nas": 114, "naas": 114, "an nas": 114
 }
 
+# ============================================================
+# HISTORY / STATS KEYWORDS
+# ============================================================
+
+HISTORY_KEYWORDS = {
+    "last": ["last", "recent", "previous", "latest"],
+    "items": ["items", "plays", "history", "list"],
+    "surahs": ["surahs", "sura", "quran"],
+    "bayans": ["bayans", "lectures", "bayanat"],
+    "chains": ["chains", "playlists"],
+    "most_played": ["most played", "favorite", "top", "most listened"],
+    "count": ["times", "time", "count", "frequency"]
+}
+
 
 # ============================================================
 # RECITER DATABASE
@@ -215,9 +229,11 @@ TARGETS = {
     "bayan": ["bayan", "bayanat", "lecture", "tafseer", "taqreer"],
     "home": ["home", "main screen", "ghar", "home screen", "start"],
     "back": ["back", "wapis", "peeche", "return", "pichay"],
-    "chain": ["chain", "chains", "playlist", "list", "collection"],
-    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved"],
+    "chain": ["chain", "chains", "playlist", "list", "collection","change","jane"],
+    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved","pokemon","bukmark", "bokmark", "book mark", "buk mark", "bookmrk"],
 }
+
+CHAIN_KEYWORDS = ["chain", "chains", "playlist", "list", "collection","jane"]
 
 # ============================================================
 # WHISPER PROMPT (For frontend speech recognition)
@@ -230,7 +246,7 @@ WHISPER_PROMPT = (
     "bookmark, nishan, unmark, remove bookmark, "
     "save, mehfooz, store, "
     "bayan, bayaan, beyon, beyond,tafseer,bayern "
-    "chain, playlist, create, banao, new, "
+    "chain, playlist, create, banao, new,jane"
     "first, second, third, pehla, dosra, tesra, "
     "ayat, aayat, ayah, aya, ayaat, "
     "create chain, select surah, select ayat, add to list, save chain, "
@@ -358,4 +374,5 @@ __all__ = [
     'get_bayan_index',
     'PLAYER_COMMANDS',
     'SKIP_ACTIONS',
+    'HISTORY_KEYWORDS'
 ]
