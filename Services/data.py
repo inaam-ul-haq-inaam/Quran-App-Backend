@@ -1,13 +1,31 @@
 # data.py - All Dictionaries for Voice Commands
 # Complete with all features: Chain, Bookmark, Bayan, Range Playback, Player Controls
-# FIXED: Added missing PLAYER_COMMANDS and SKIP_ACTIONS
+# Clean version – no duplicates, well-structured
 
 import re
 
 # ============================================================
+# CHAIN KEYWORDS (for chain play & navigation)
+# ============================================================
+CHAIN_KEYWORDS = [
+    "chain", "chains", "playlist", "list", "collection",
+    "jane", "change", "chane", "chan"
+]
+
+# ============================================================
+# CHAIN CREATION KEYWORDS
+# ============================================================
+CREATE_ACTION_KEYWORDS = ["create", "banao", "new", "banade", "nayi"]
+ADD_ACTION_KEYWORDS = ["add", "add kar", "shamil karo", "daldo", "shamil kro"]
+TARGET_LIST_KEYWORDS = ["list", "playlist", "chain list", "collection", "chains list"]
+
+SELECT_ACTION_KEYWORDS = ["select", "choose", "pick", "chuno", "chune"]
+SURAH_KEYWORDS = ["surah", "sura", "chapter", "para"]
+AYAT_KEYWORDS = ["ayat", "aayat", "ayah", "aya", "ayaat"]
+
+# ============================================================
 # SURAH DATABASE (114 Surahs with multiple spellings)
 # ============================================================
-# (Keep your existing SURAH_DB full 114 entries – omitted for brevity)
 SURAH_DB = {
     # 1–10
     "fatiha": 1, "al fatiha": 1, "fateha": 1, "fathia": 1,
@@ -149,7 +167,6 @@ SURAH_DB = {
 # ============================================================
 # HISTORY / STATS KEYWORDS
 # ============================================================
-
 HISTORY_KEYWORDS = {
     "last": ["last", "recent", "previous", "latest"],
     "items": ["items", "plays", "history", "list"],
@@ -159,7 +176,6 @@ HISTORY_KEYWORDS = {
     "most_played": ["most played", "favorite", "top", "most listened"],
     "count": ["times", "time", "count", "frequency"]
 }
-
 
 # ============================================================
 # RECITER DATABASE
@@ -196,7 +212,7 @@ COMMANDS = {
     "bookmark_range": ["bookmark range", "range bookmark", "nishan range", "save range"],
     "show_bookmarks": ["show bookmarks", "my bookmarks", "bookmarks dikhao", "mere nishan", "bookmark list"],
     "bookmark_with_title": ["bookmark as", "save as", "nishan as"],
-    "bayan": ["bayan", "bayaan", "baya", "beaan", "biyan", "bayn", "byan","beyon","beyond"],
+    "bayan": ["bayan", "bayaan", "baya", "beaan", "biyan", "bayn", "byan", "beyon", "beyond"],
     "ayat": ["ayat", "aayat", "ayah", "aya", "ayaat", "ayet", "ayath", "ayyat", "aiat", "ayatt"],
     "surah": ["surah", "sura", "sora", "sara", "chapter", "para"],
     "jump": ["jump", "jamp", "go to", "goto", "jao", "chalo", "le chalo", "lejao", "jump to"],
@@ -229,11 +245,9 @@ TARGETS = {
     "bayan": ["bayan", "bayanat", "lecture", "tafseer", "taqreer"],
     "home": ["home", "main screen", "ghar", "home screen", "start"],
     "back": ["back", "wapis", "peeche", "return", "pichay"],
-    "chain": ["chain", "chains", "playlist", "list", "collection","change","jane"],
-    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved","pokemon","bukmark", "bokmark", "book mark", "buk mark", "bookmrk"],
+    "chain": ["chain", "chains", "playlist", "list", "collection", "change", "jane", "chane", "chan"],
+    "bookmark": ["bookmark", "bookmarks", "nishan", "mahfooz", "saved", "bukmark", "bokmark", "book mark", "buk mark", "bookmrk"],
 }
-
-CHAIN_KEYWORDS = ["chain", "chains", "playlist", "list", "collection","jane"]
 
 # ============================================================
 # WHISPER PROMPT (For frontend speech recognition)
@@ -245,8 +259,8 @@ WHISPER_PROMPT = (
     "open, kholo, go to, read, parho, "
     "bookmark, nishan, unmark, remove bookmark, "
     "save, mehfooz, store, "
-    "bayan, bayaan, beyon, beyond,tafseer,bayern "
-    "chain, playlist, create, banao, new,jane"
+    "bayan, bayaan, beyon, beyond, tafseer, bayern, "
+    "chain, playlist, create, banao, new, jane, "
     "first, second, third, pehla, dosra, tesra, "
     "ayat, aayat, ayah, aya, ayaat, "
     "create chain, select surah, select ayat, add to list, save chain, "
@@ -335,7 +349,6 @@ def normalize_text(text: str) -> str:
 # ============================================================
 # ADD THE MISSING LISTS REQUIRED BY tokenCreate.py
 # ============================================================
-
 PLAYER_COMMANDS = ["play", "pause", "stop", "resume", "next", "previous", "jump"]
 
 SKIP_ACTIONS = [
@@ -374,5 +387,13 @@ __all__ = [
     'get_bayan_index',
     'PLAYER_COMMANDS',
     'SKIP_ACTIONS',
-    'HISTORY_KEYWORDS'
+    'HISTORY_KEYWORDS',
+    # Additional lists that might be used elsewhere
+    'CHAIN_KEYWORDS',
+    'CREATE_ACTION_KEYWORDS',
+    'ADD_ACTION_KEYWORDS',
+    'TARGET_LIST_KEYWORDS',
+    'SELECT_ACTION_KEYWORDS',
+    'SURAH_KEYWORDS',
+    'AYAT_KEYWORDS',
 ]

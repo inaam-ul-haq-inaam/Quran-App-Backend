@@ -838,7 +838,11 @@ from Services.data import (
     PLAYER_COMMANDS,
     SKIP_ACTIONS,
     CHAIN_KEYWORDS,
-    HISTORY_KEYWORDS 
+    HISTORY_KEYWORDS,
+    CREATE_ACTION_KEYWORDS,
+    ADD_ACTION_KEYWORDS,
+    TARGET_LIST_KEYWORDS,
+    SELECT_ACTION_KEYWORDS
 )
 from Services.spellCheck import find_surah_id
 
@@ -1257,44 +1261,73 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
     # SECTION 2: SHOW BOOKMARKS / SHOW CHAINS
     # ============================================================
     
-    if re.search(r"(?:show|my|open)\s+bookmarks?", text):
-        response["player"] = "show_bookmarks"
-        response["type"] = "navigation"
-        print("📖 Show bookmarks list")
-        return response
+    # Build regex pattern from CHAIN_KEYWORDS (for "show chains" variants)
+    chain_nav_pattern = "|".join(re.escape(kw) for kw in CHAIN_KEYWORDS)
     
-    if re.search(r"(?:show|my|open)\s+chains?", text):
+    # Show Chains / Chain List (supports all keywords from data.py)
+    if re.search(rf"show\s+(?:{chain_nav_pattern})", text):
         response["player"] = "show_chains"
         response["type"] = "navigation"
-        print("📋 Show chains list")
+        print("📋 Show chains command matched")
+        return response
+    
+    # Show Bookmarks / Quran Bookmarks
+    if re.search(r"(?:show|my|open)\s+bookmarks?", text) or re.search(r"(?:quran|surah)\s+bookmarks?", text):
+        response["player"] = "show_bookmarks"
+        response["type"] = "navigation"
+        print("📖 Show bookmarks command matched")
         return response
 
-
     # ============================================================
-    # SECTION 3: SELECT COMMANDS (for chain building)
+# SECTION 3: SELECT COMMANDS (for chain building)
+# ============================================================
+
+    # Helper to match any of the keywords (word boundaries)
+    def _match_keyword(text, keywords):
+        for kw in keywords:
+            if re.search(rf"\b{re.escape(kw)}\b", text):
+                return True
+        return False
+    
+    
+    # ============================================================
+    # 1. SELECT SURAH (with or without "surah" word)
     # ============================================================
     
-    if re.search(r"select\s+surah", text) or re.search(r"surah\s+select", text):
-        surah_match = re.search(r"(?:select\s+)?surah\s+([a-z]+)", text)
+    # Pattern: "select surah fatiha" or "select fatiha" (if surah name is recognized)
+    if _match_keyword(text, SELECT_ACTION_KEYWORDS):
+        # First, try to match with explicit "surah" word
+        surah_match = re.search(r"(?:select|choose)\s+surah\s+([a-z]+)", text, re.IGNORECASE)
         if surah_match:
-            response["player"] = "select_surah"
-            response["type"] = "chain"
-            response["surahName"] = surah_match.group(1)
-            print(f"🎯 Select surah: {response['surahName']}")
-            return response
-
-    simple_select_match = re.search(r"select\s+([a-z]+)$", text)
-    if simple_select_match:
-        surah_name = simple_select_match.group(1)
-        if find_surah_id(surah_name):
-            response["player"] = "select_surah"
-            response["type"] = "chain"
-            response["surahName"] = surah_name
-            print(f"🎯 Select surah (simple): {surah_name}")
-            return response
+            surah_name = surah_match.group(1)
+            if find_surah_id(surah_name):
+                response["player"] = "select_surah"
+                response["type"] = "chain"
+                response["surahName"] = surah_name
+                print(f"🎯 Select surah: {surah_name}")
+                return response
+        
+        # Then, try simple "select [surah_name]" at end of string (no extra words)
+        simple_match = re.search(r"select\s+([a-z]+)$", text, re.IGNORECASE)
+        if simple_match:
+            surah_name = simple_match.group(1)
+            if find_surah_id(surah_name):
+                response["player"] = "select_surah"
+                response["type"] = "chain"
+                response["surahName"] = surah_name
+                print(f"🎯 Select surah (simple): {surah_name}")
+                return response
     
-    if re.search(r"select\s+ayat", text) or re.search(r"ayat\s+select", text):
-        range_match = re.search(r"(?:select\s+)?ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+(\d+)", text)
+    # ============================================================
+    # 2. SELECT AYAT (range or single) – numbers already normalized to digits
+    # ============================================================
+    
+    # Since text is already normalized, "ayat" word is standard and numbers are digits.
+    # So we can simply search for "select ayat" pattern.
+    
+    if re.search(r"select\s+ayat", text, re.IGNORECASE):
+        # Check for range first: "select ayat 1 to 5" or "select ayat 1 se 5"
+        range_match = re.search(r"select\s+ayat\s+(\d+)\s+(?:to|se|sa|sy|say)\s+(\d+)", text, re.IGNORECASE)
         if range_match:
             response["player"] = "select_ayat"
             response["type"] = "chain"
@@ -1302,8 +1335,9 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             response["toAyat"] = int(range_match.group(2))
             print(f"🎯 Select range ayat: {response['fromAyat']} → {response['toAyat']}")
             return response
-
-        single_match = re.search(r"(?:select\s+)?ayat\s+(\d+)", text)
+        
+        # Then single ayat: "select ayat 5"
+        single_match = re.search(r"select\s+ayat\s+(\d+)", text, re.IGNORECASE)
         if single_match:
             response["player"] = "select_ayat"
             response["type"] = "chain"
@@ -1311,21 +1345,34 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
             print(f"🎯 Select single ayat: {response['fromAyat']}")
             return response
 
-
     # ============================================================
     # SECTION 4: CHAIN CREATION COMMANDS
     # ============================================================
     
-    if re.search(r"create\s+chain", text):
+    # Build regex patterns
+    create_pattern = "|".join(re.escape(kw) for kw in CREATE_ACTION_KEYWORDS)
+    chain_obj_pattern = "|".join(re.escape(kw) for kw in CHAIN_KEYWORDS)
+    add_pattern = "|".join(re.escape(kw) for kw in ADD_ACTION_KEYWORDS)
+    list_target_pattern = "|".join(re.escape(kw) for kw in TARGET_LIST_KEYWORDS)
+    
+
+# 1. CREATE CHAIN (e.g., "create chain", "banao playlist")
+
+    if re.search(rf"(?:{create_pattern})\s+(?:{chain_obj_pattern})", text, re.IGNORECASE):
         response["player"] = "open_chain_builder"
         response["type"] = "chain"
+        print("🎯 Create chain command")
         return response
-
-    if re.search(r"add\s+to\s+list", text) or re.search(r"add\s+kar", text):
+    
+    
+    # 2. ADD TO LIST (e.g., "add to list", "add kar playlist mein")
+    
+    if re.search(rf"(?:{add_pattern})\s+(?:to\s+)?(?:{list_target_pattern})", text, re.IGNORECASE):
         response["player"] = "add_to_list"
         response["type"] = "chain"
+        print("🎯 Add to list command")
         return response
-
+#set title 
     title_match = re.search(r"(?:title|name|set title)\s+(.+?)(?:\s+chain)?$", text)
     if not title_match:
         title_match = re.search(r"naam\s+(.+)", text)
@@ -1363,11 +1410,21 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         response["type"] = "chain"
         return response
         
-    delete_chain_match = re.search(r"(?:delete|remove|hatao)\s+chain\s+(\w+(?:\s+\w+)?)", text)
+    # Build regex pattern from CHAIN_KEYWORDS
+    chain_keywords_pattern = "|".join(re.escape(kw) for kw in CHAIN_KEYWORDS)
+    
+    # Match: delete/remove/hatao + any chain keyword + chain name
+    delete_chain_match = re.search(
+        rf"(?:delete|remove|hatao)\s+(?:{chain_keywords_pattern})\s+(\w+(?:\s+\w+)?)",
+        text,
+        re.IGNORECASE
+    )
+    
     if delete_chain_match:
         response["player"] = "delete_chain"
         response["type"] = "chain"
         response["chainName"] = delete_chain_match.group(1).strip()
+        print(f"🗑️ Delete chain matched: {response['chainName']}")
         return response
 
     if re.search(r"delete\s+all\s+chains", text) or re.search(r"sab\s+chains\s+hatao", text):
