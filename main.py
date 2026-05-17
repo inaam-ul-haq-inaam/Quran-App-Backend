@@ -10,6 +10,7 @@ from routers.History import track_play_route
 from routers.History import last_played_route
 from routers.History import resume_position_route
 from routers.History import most_played_route
+from routers.History import update_position
 
 
 app = FastAPI()
@@ -47,6 +48,8 @@ app.include_router(last_played_route.router)
 app.include_router(resume_position_route.router)
 #most played content router
 app.include_router(most_played_route.router)
+#update position 
+app.include_router(update_position.router)
 
 
 from routers.Voice import voice_route

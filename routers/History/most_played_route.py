@@ -13,6 +13,8 @@ def most_played(
     """
     Get the most played item for a given content type.
     Example: /most_played/1?content_type=surah
+    
+    UPDATED: Now uses COUNT(*) instead of play_count column
     """
     conn = get_connection()
     if conn is None:
@@ -21,11 +23,17 @@ def most_played(
     try:
         cursor = conn.cursor()
 
-        # Query to get the content_id with highest play_count for the given type
+        # ============================================================
+        # UPDATED: Use COUNT(*) to get play frequency
+        # Table has multiple entries per content, so we COUNT them
+        # ============================================================
         query = """
-            SELECT TOP 1 content_id, play_count
+            SELECT TOP 1 
+                content_id, 
+                COUNT(*) as play_count
             FROM user_play_history
             WHERE profileId = ? AND content_type = ?
+            GROUP BY content_id
             ORDER BY play_count DESC
         """
         cursor.execute(query, (profileId, content_type))
@@ -55,6 +63,8 @@ def most_played(
                 subtitle = surah[1]
             else:
                 name = f"Surah {content_id}"
+                subtitle = ""
+                
         elif content_type == "bayan":
             cursor.execute("SELECT Title, ScholarName FROM Bayan WHERE BayanID = ?", (content_id,))
             bayan = cursor.fetchone()
@@ -63,6 +73,8 @@ def most_played(
                 subtitle = bayan[1] if bayan[1] else "Bayan"
             else:
                 name = f"Bayan {content_id}"
+                subtitle = ""
+                
         elif content_type == "chain":
             cursor.execute("SELECT title FROM chain WHERE ChainID = ?", (content_id,))
             chain = cursor.fetchone()
@@ -71,6 +83,7 @@ def most_played(
                 subtitle = "Chain"
             else:
                 name = f"Chain {content_id}"
+                subtitle = ""
 
         return {
             "status": "success",

@@ -24,6 +24,24 @@ SURAH_KEYWORDS = ["surah", "sura", "chapter", "para"]
 AYAT_KEYWORDS = ["ayat", "aayat", "ayah", "aya", "ayaat"]
 
 # ============================================================
+# QURAN PLAYBACK KEYWORDS (for token_creator.py)
+# ============================================================
+FROM_KEYWORDS = ["from"]
+RANGE_CONNECTORS = ["to", "se", "sa", "sy", "say"]
+END_KEYWORDS = ["tak", "till", "until"]
+AYAT_WORD = "ayat"
+
+# ============================================================
+# BAYAN COMMAND KEYWORDS
+# ============================================================
+BAYAN_TRIGGER_WORDS = [
+    "bayan", "bayanat", "tafseer", "tafsir", "explanation", "beyon", "beyond", "bayern"
+]
+BAYAN_ACTION_VERBS = ["play", "sunao", "chalao"]
+
+# Index words are already in BAYAN_INDEX_MAP (do not duplicate)
+
+# ============================================================
 # SURAH DATABASE (114 Surahs with multiple spellings)
 # ============================================================
 SURAH_DB = {
@@ -388,7 +406,7 @@ __all__ = [
     'PLAYER_COMMANDS',
     'SKIP_ACTIONS',
     'HISTORY_KEYWORDS',
-    # Additional lists that might be used elsewhere
+    # Additional lists
     'CHAIN_KEYWORDS',
     'CREATE_ACTION_KEYWORDS',
     'ADD_ACTION_KEYWORDS',
@@ -396,4 +414,10 @@ __all__ = [
     'SELECT_ACTION_KEYWORDS',
     'SURAH_KEYWORDS',
     'AYAT_KEYWORDS',
+    'FROM_KEYWORDS',
+    'RANGE_CONNECTORS',
+    'END_KEYWORDS',
+    'AYAT_WORD',
+    'BAYAN_TRIGGER_WORDS',
+    'BAYAN_ACTION_VERBS',
 ]

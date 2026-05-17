@@ -16,6 +16,9 @@ def last_played_items(
     Get last N played items for a user.
     - If content_type is provided, returns only that type
     - Otherwise returns mixed items
+    
+    UPDATED: Now uses simple ORDER BY played_at DESC
+    (play_count column removed)
     """
     # Validate limit
     if limit <= 0:
@@ -28,22 +31,34 @@ def last_played_items(
     try:
         cursor = conn.cursor()
         
-        # Base query
+        # ============================================================
+        # UPDATED: Simple query - no play_count needed
+        # ORDER BY played_at DESC gives most recent first
+        # ============================================================
         query = """
-            SELECT id, profileId, content_type, content_id, range_start, range_end,
-                   current_position, played_at, play_count
+            SELECT TOP ?
+                id, 
+                profileId, 
+                content_type, 
+                content_id, 
+                range_start, 
+                range_end,
+                current_position, 
+                played_at,
+                voice_mode,
+                completed,
+                duration_seconds
             FROM user_play_history
             WHERE profileId = ?
         """
-        params = [profileId]
+        params = [limit, profileId]
         
         # Add content_type filter only if provided
         if content_type:
             query += " AND content_type = ?"
             params.append(content_type)
         
-        query += " ORDER BY played_at DESC OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY"
-        params.append(limit)
+        query += " ORDER BY played_at DESC"
         
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -59,7 +74,9 @@ def last_played_items(
                 range_end=row[5],
                 current_position=row[6],
                 played_at=row[7],
-                play_count=row[8]
+                voice_mode=row[8],
+                completed=row[9],
+                duration_seconds=row[10]
             )
             
             # Enrich with name/subtitle from respective table
@@ -72,6 +89,7 @@ def last_played_items(
                 else:
                     item.name = f"Surah {item.content_id}"
                     item.subtitle = ""
+                    
             elif item.content_type == "bayan":
                 cursor.execute("SELECT Title, ScholarName FROM Bayan WHERE BayanID = ?", (item.content_id,))
                 bayan = cursor.fetchone()
@@ -81,6 +99,7 @@ def last_played_items(
                 else:
                     item.name = f"Bayan {item.content_id}"
                     item.subtitle = ""
+                    
             elif item.content_type == "chain":
                 cursor.execute("SELECT title FROM chain WHERE ChainID = ?", (item.content_id,))
                 chain = cursor.fetchone()
