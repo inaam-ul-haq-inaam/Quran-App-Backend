@@ -36,7 +36,7 @@ def last_played_items(
         # ORDER BY played_at DESC gives most recent first
         # ============================================================
         query = """
-            SELECT TOP ?
+            SELECT TOP (?)
                 id, 
                 profileId, 
                 content_type, 
@@ -91,14 +91,14 @@ def last_played_items(
                     item.subtitle = ""
                     
             elif item.content_type == "bayan":
-                cursor.execute("SELECT Title, ScholarName FROM Bayan WHERE BayanID = ?", (item.content_id,))
+                cursor.execute("SELECT Title FROM Bayan WHERE BayanID = ?", (item.content_id,))
                 bayan = cursor.fetchone()
                 if bayan:
                     item.name = bayan[0]
-                    item.subtitle = bayan[1] if bayan[1] else "Bayan"
+                    item.subtitle = "Dr. Israr Ahmed"
                 else:
                     item.name = f"Bayan {item.content_id}"
-                    item.subtitle = ""
+                    item.subtitle = "Dr. Israr Ahmed"
                     
             elif item.content_type == "chain":
                 cursor.execute("SELECT title FROM chain WHERE ChainID = ?", (item.content_id,))

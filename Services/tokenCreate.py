@@ -74,6 +74,35 @@ def _add_surah_name(response: dict) -> dict:
     return response
 
 
+def _get_resume_position(surah_id: int, profile_id: int = 1) -> int:
+    """Fetch the latest resume position for a surah from play history"""
+    if not surah_id:
+        return 0
+    
+    conn = get_connection()
+    if conn is None:
+        return 0
+    
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT TOP 1 current_position
+            FROM user_play_history
+            WHERE profileId = ?
+              AND content_type = 'surah'
+              AND content_id = ?
+              AND completed = 0
+            ORDER BY played_at DESC
+        """
+        cursor.execute(query, (profile_id, surah_id))
+        row = cursor.fetchone()
+        return row[0] if row else 0
+    except Exception as e:
+        print(f"❌ Error fetching resume position: {e}")
+        return 0
+    finally:
+        conn.close()
+
 # ============================================================================
 # SECTION B: HELPER FUNCTIONS FOR BAYAN
 # ============================================================================
@@ -747,6 +776,55 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
 
 
     # ============================================================
+    # SECTION 6.5: RESUME SPECIFIC CONTENT
+    # ============================================================
+    
+    # 1. Resume Bayan -> Treat as Play Bayan
+    bayan_trigger_pattern = "|".join(re.escape(w) for w in BAYAN_TRIGGER_WORDS)
+    resume_bayan_match = re.search(rf"resume\s+(?:{bayan_trigger_pattern})\s+([a-z]+)", text, re.IGNORECASE)
+    if resume_bayan_match:
+        surah_name = resume_bayan_match.group(1)
+        surah_id = find_surah_id(surah_name)
+        if surah_id:
+            response["player"] = "play"
+            response["type"] = "bayan"
+            response["surahId"] = surah_id
+            response["bayanIndex"] = 0
+            response = _add_bayan_details(response)
+            print(f"🎤 Resume Bayan (treated as play): {surah_name}")
+            return response
+
+    # 2. Resume Chain -> Treat as Play Chain
+    resume_chain_match = re.search(rf"resume\s+(?:{chain_pattern})\s+(\w+(?:\s+\w+)?)", text, re.IGNORECASE)
+    if resume_chain_match:
+        response["player"] = "play_chain"
+        response["type"] = "chain"
+        response["chainName"] = resume_chain_match.group(1).strip()
+        print(f"🎤 Resume Chain (treated as play): {response['chainName']}")
+        return response
+
+    # 3. Resume Specific Surah
+    resume_surah_match = re.search(r"resume\s+(?:surah\s+)?([a-z]+(?:\s+[a-z]+)?)", text, re.IGNORECASE)
+    if resume_surah_match:
+        target_name = resume_surah_match.group(1).strip()
+        surah_id = find_surah_id(target_name)
+        if surah_id:
+            pos = _get_resume_position(surah_id)
+            if pos > 0:
+                response["player"] = "resume_surah"
+                response["type"] = "surah"
+                response["surah"] = surah_id
+                response["resumeIndex"] = pos
+                response = _add_surah_name(response)
+                print(f"🎯 Resume Surah: {target_name} from index {pos}")
+                return response
+            else:
+                response["player"] = "no_resume_found"
+                response["surahName"] = target_name
+                print(f"⚠️ No resume found for: {target_name}")
+                return response
+
+    # ============================================================
     # SECTION 7: QURAN PLAYBACK (5 patterns – fully data‑driven)
     # ============================================================
     
@@ -879,6 +957,19 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         print("🎯 Previous surah command")
         return response
 
+
+    # ============================================================
+    # SECTION 8.5: APP NAVIGATION (History, etc.)
+    # ============================================================
+
+    match = re.search(r"(?:show|open|display|dekhao|dikhao)\s+(?:(surah|bayan|chain)\s+)?(?:history|record)", text, re.IGNORECASE)
+    if match:
+        response["player"] = "show_history"
+        filter_type = match.group(1)
+        if filter_type:
+            response["filter"] = filter_type.lower()
+        print(f"🎯 Show History command (Filter: {response.get('filter', 'All')})")
+        return response
 
     # ============================================================
     # SECTION 9: STANDARD PLAYER CONTROLS
