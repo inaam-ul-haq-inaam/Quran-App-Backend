@@ -37,7 +37,7 @@ from Services.data import (
     END_KEYWORDS,
     AYAT_WORD,
 )
-from Services.spellCheck import find_surah_id
+from Services.spellCheck import find_surah_id, get_surah_name_from_id
 
 
 # ============================================================================
@@ -160,44 +160,119 @@ def _get_bayans_by_surah(surah_id: int) -> list:
 
 
 def _find_bayan_by_ayat(surah_id: int, ayat_number: int) -> dict:
-    """Find which bayan contains the given ayat number"""
+    """Find which bayan contains the given ayat number, with fallback to all surahs if needed"""
     if not surah_id or not ayat_number:
-        return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
+        return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None, "surahId": None}
     
     print(f"🔍 Searching for ayat {ayat_number} in surah {surah_id}")
     
+    # 1. Try to find inside the requested surah first
     bayans = _get_bayans_by_surah(surah_id)
+    if bayans:
+        for idx, bayan in enumerate(bayans):
+            start_ayat = bayan.get("startAyat")
+            end_ayat = bayan.get("endAyat")
+            
+            print(f"   Checking bayan [{idx}]: {bayan.get('title')} -> Ayats {start_ayat}-{end_ayat}")
+            
+            if start_ayat and end_ayat:
+                if start_ayat <= ayat_number <= end_ayat:
+                    print(f"   ✅ MATCH FOUND inside requested surah! Index {idx}")
+                    return {
+                        "bayanIndex": idx,
+                        "bayanTitle": bayan.get("title"),
+                        "bayanUrl": bayan.get("audioUrl"),
+                        "bayanId": bayan.get("bayanId"),
+                        "startAyat": start_ayat,
+                        "endAyat": end_ayat,
+                        "surahId": surah_id
+                    }
     
-    if not bayans:
-        return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None}
+    # 2. If not found in the requested surah, search ALL surahs in the database
+    print(f"⚠️ Ayat {ayat_number} not found in surah {surah_id}'s bayans. Searching all surahs...")
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            query = """
+                SELECT b.BayanID, b.Title, b.AudioURL, b.StartAyatID, b.EndAyatID, b.SurahID
+                FROM Bayan b
+                WHERE b.StartAyatID <= ? AND b.EndAyatID >= ?
+                ORDER BY b.SurahID ASC
+            """
+            cursor.execute(query, (ayat_number, ayat_number))
+            rows = cursor.fetchall()
+            
+            if rows:
+                print(f"   ℹ️ Found {len(rows)} matching bayans across all surahs for ayat {ayat_number}")
+                
+                requested_surah_name = get_surah_name_from_id(surah_id)
+                best_row = None
+                best_score = -1
+                
+                from thefuzz import fuzz
+                
+                for row in rows:
+                    candidate_surah_id = row[5]
+                    candidate_surah_name = get_surah_name_from_id(candidate_surah_id)
+                    
+                    if requested_surah_name and candidate_surah_name:
+                        score = fuzz.token_set_ratio(requested_surah_name.lower(), candidate_surah_name.lower())
+                        print(f"      Fuzzy matching '{requested_surah_name}' with candidate '{candidate_surah_name}' (ID: {candidate_surah_id}) -> Score: {score}")
+                        if score > best_score:
+                            best_score = score
+                            best_row = row
+                    else:
+                        if best_row is None:
+                            best_row = row
+                
+                if best_row:
+                    matched_bayan_id = best_row[0]
+                    matched_title = best_row[1]
+                    matched_audio = best_row[2]
+                    matched_start = best_row[3]
+                    matched_end = best_row[4]
+                    matched_surah_id = best_row[5]
+                    
+                    base_audio_url = f"{BASE_IP}/audio/Dr_Israr/"
+                    full_audio_url = f"{base_audio_url}{matched_audio}"
+                    
+                    sibling_bayans = _get_bayans_by_surah(matched_surah_id)
+                    matched_index = 0
+                    for idx, sib in enumerate(sibling_bayans):
+                        if sib.get("bayanId") == matched_bayan_id:
+                            matched_index = idx
+                            break
+                    
+                    print(f"   ✅ MATCH FOUND in surah {matched_surah_id} (bayan index {matched_index})! Title: {matched_title}")
+                    return {
+                        "bayanIndex": matched_index,
+                        "bayanTitle": matched_title,
+                        "bayanUrl": full_audio_url,
+                        "bayanId": matched_bayan_id,
+                        "startAyat": matched_start,
+                        "endAyat": matched_end,
+                        "surahId": matched_surah_id
+                    }
+        except Exception as e:
+            print(f"❌ Error searching bayans across database: {e}")
+        finally:
+            conn.close()
+
+    # 3. Fallback to first bayan of requested surah
+    if bayans:
+        print(f"⚠️ No bayan contains ayat {ayat_number} anywhere, returning first bayan of surah {surah_id}")
+        return {
+            "bayanIndex": 0,
+            "bayanTitle": bayans[0].get("title"),
+            "bayanUrl": bayans[0].get("audioUrl"),
+            "bayanId": bayans[0].get("bayanId"),
+            "startAyat": bayans[0].get("startAyat"),
+            "endAyat": bayans[0].get("endAyat"),
+            "surahId": surah_id
+        }
     
-    for idx, bayan in enumerate(bayans):
-        start_ayat = bayan.get("startAyat")
-        end_ayat = bayan.get("endAyat")
-        
-        print(f"   Checking bayan [{idx}]: {bayan.get('title')} -> Ayats {start_ayat}-{end_ayat}")
-        
-        if start_ayat and end_ayat:
-            if start_ayat <= ayat_number <= end_ayat:
-                print(f"   ✅ MATCH FOUND! Index {idx}")
-                return {
-                    "bayanIndex": idx,
-                    "bayanTitle": bayan.get("title"),
-                    "bayanUrl": bayan.get("audioUrl"),
-                    "bayanId": bayan.get("bayanId"),
-                    "startAyat": start_ayat,
-                    "endAyat": end_ayat
-                }
-    
-    print(f"⚠️ No bayan contains ayat {ayat_number}, returning first bayan (index 0)")
-    return {
-        "bayanIndex": 0,
-        "bayanTitle": bayans[0].get("title"),
-        "bayanUrl": bayans[0].get("audioUrl"),
-        "bayanId": bayans[0].get("bayanId"),
-        "startAyat": bayans[0].get("startAyat"),
-        "endAyat": bayans[0].get("endAyat")
-    }
+    return {"bayanIndex": None, "bayanTitle": None, "bayanUrl": None, "bayanId": None, "surahId": None}
 
 
 def _get_bayan_by_index(surah_id: int, bayan_index: int = 0) -> dict:
@@ -212,6 +287,7 @@ def _get_bayan_by_index(surah_id: int, bayan_index: int = 0) -> dict:
             "bayanId": bayan.get("bayanId")
         }
     
+    
     return {"bayanTitle": None, "bayanUrl": None, "bayanId": None}
 
 
@@ -219,18 +295,62 @@ def _add_bayan_details(response: dict) -> dict:
     if response.get('type') == 'bayan' and response.get('surahId'):
         if response.get('requestedAyat'):
             bayan_info = _find_bayan_by_ayat(response['surahId'], response['requestedAyat'])
+            
+            # 🔥 Update surahId if matched in a different surah
+            if bayan_info.get('surahId') and bayan_info.get('surahId') != response['surahId']:
+                print(f"🔄 Updating surahId in response from {response['surahId']} to {bayan_info.get('surahId')}")
+                response['surahId'] = bayan_info.get('surahId')
+            
+            
             response['bayanIndex'] = bayan_info.get('bayanIndex')
             response['bayanTitle'] = bayan_info.get('bayanTitle')
             response['bayanUrl'] = bayan_info.get('bayanUrl')
-            response['bayanId'] = bayan_info.get('bayanId')   # add this
+            response['bayanId'] = bayan_info.get('bayanId')
             response['bayanRange'] = f"{bayan_info.get('startAyat')}-{bayan_info.get('endAyat')}"
         else:
             bayan_info = _get_bayan_by_index(response['surahId'], response.get('bayanIndex', 0))
             response['bayanTitle'] = bayan_info.get('bayanTitle')
             response['bayanUrl'] = bayan_info.get('bayanUrl')
-            response['bayanId'] = bayan_info.get('bayanId')   # add this
+            response['bayanId'] = bayan_info.get('bayanId')
+            
+        # Get raw list of bayans for final/updated surahId
+        raw_bayans = _get_bayans_by_surah(response['surahId'])
+        
+        # Format the list specifically for the frontend player
+        formatted_bayans = []
+        for b in raw_bayans:
+            formatted_bayans.append({
+                "BayanID": b.get("bayanId"),
+                "Title": b.get("title"),
+                "AudioUrl": b.get("audioUrl"),
+                "ScholarName": "Dr. Israr Ahmed",
+                "StartAyatID": b.get("startAyat"),
+                "EndAyatID": b.get("endAyat")
+            })
+            
+        matched_index = response.get('bayanIndex', 0)
+        if matched_index is None:
+            matched_index = 0
+            
+        sliced_bayans = formatted_bayans[matched_index:]
+        
+        response['bayanList'] = sliced_bayans
+        response['bayanIndex'] = 0
+        
+        if sliced_bayans:
+            first_item = sliced_bayans[0]
+            response['bayanTitle'] = first_item.get('Title')
+            response['bayanUrl'] = first_item.get('AudioUrl')
+            response['bayanId'] = first_item.get('BayanID')
+            
+            start = first_item.get('StartAyatID')
+            end = first_item.get('EndAyatID')
+            if start is not None and end is not None:
+                response['bayanRange'] = f"{start}-{end}"
+            else:
+                response['bayanRange'] = None
+                
     return response
-
 
 # ============================================================================
 # SECTION C: MAIN TOKEN CREATOR FUNCTION
@@ -269,6 +389,87 @@ def create_command_token(text: Union[str, List[str]]) -> Dict[str, Any]:
         "bayanUrl": None,
         "isVoiceMode": True
     }
+
+    # ============================================================
+    # SPECIAL HIGH-PRIORITY: DAILY QURAN VOICE COMMANDS
+    # ============================================================
+    # 1. Listen Quran Spelling & Typo Variations List
+    listen_quran_variations = [
+        "listen quran", "listn quran", "lisen quran", "lisn quran", "leson quran", "lesn quran", "lesten quran",
+        "listen qur", "listn qur", "lisen qur", "lisn qur", "leson qur", "lesn qur",
+        "listen to quran", "listen to qur", "listen to qurn", "listen to quraan",
+        "play daily quran", "play daily qur", "play daily qurn", "play quran daily",
+        "listen daily quran", "listen daily qur", "listen daily qurn",
+        "quran listen", "qur listen", "qurn listen", "quran play"
+    ]
+    # 2. Save Quran Progress Spelling & Typo Variations List
+    save_quran_variations = [
+        "save quran progress", "save progress", "save quran", "sav quran progress", "sav progress", "sav quran",
+        "save quran progres", "save progres", "sav progres", "seve progress", "seve progres", "saf progress", "saf progres",
+        "seve quran", "saf quran", "save daily quran progress", "save daily quran", "save daily progress",
+        "sav daily quran progress", "sav daily progress", "save daily quran", "seve daily progress", "seve daily quran",
+        "saf daily progress", "saf daily quran", "save qurn progress", "save qurn progres", "save qurn",
+        "sav qurn progress", "sav qurn", "seve qurn", "saf qurn"
+    ]
+    # 3. Continue Quran Spelling & Typo Variations List
+    continue_quran_variations = [
+        "continue quran", "continue daily quran", "resume quran", "resume daily quran", "continue qur", "continue", "resume",
+        "rsume quran", "resme quran", "rasume quran", "resem quran", "resum quran", "rsume", "resme", "resum", "rasume",
+        "continiue quran", "contine quran", "contnou quran", "contnue quran", "contnu quran", "contine", "contnue", "contnu",
+        "continue daily qur", "resume daily qur", "rsume qur", "resme qur", "resum qur", "rasume qur",
+        "continiue qur", "contine qur", "contnou qur", "contnue qur", "contnu qur",
+        "continue qurn", "resume qurn", "rsume qurn", "resme qurn", "resum qurn", "rasume qurn",
+        "continiue qurn", "contine qurn", "contnou qurn", "contnue qurn", "contnu qurn"
+    ]
+
+    is_listen_quran = (
+        text in listen_quran_variations or
+        any(v in text for v in ["listen quran", "listn quran", "listen qur", "listn qur"]) or
+        re.search(r"\b(listen|listn|lisen|lisn|leson|lesn|lesten|lestn|play)\s+(?:to\s+)?(?:daily\s+)?(quran|qur|qurn|quraan)\b", text)
+    )
+
+    is_save_quran = (
+        text in save_quran_variations or
+        any(v in text for v in ["save quran", "sav quran", "save progress", "sav progress", "seve progress"]) or
+        re.search(r"\b(save|sav|seve|saf|store|stor|stope|stop|paus|pause)\s+(?:daily\s+)?(?:quran\s+)?(progress|progres|prog|progrs)\b", text) or
+        re.search(r"\b(save|sav|seve|saf)\s+daily\s+(quran|qur|qurn|quraan)\b", text) or
+        re.search(r"\b(save|sav|seve|saf)\s+(quran|qur|qurn|quraan)\s+progress\b", text)
+    )
+
+    is_continue_quran = (
+        text in continue_quran_variations or
+        text == "continue" or
+        text == "resume" or
+        text == "rsume" or
+        text == "resme" or
+        text == "resum" or
+        any(v in text for v in ["continue quran", "continue qur", "resume quran", "resume qur", "rsume quran", "resme quran"]) or
+        re.search(r"\b(continue|contine|continiue|contnou|contnue|contnu|resume|rsume|resme|rasume|resem|resum)\s+(?:daily\s+)?(?:quran|qur|qurn|quraan)\b", text)
+    )
+
+    if is_listen_quran:
+        print("🎙️ MATCHED DAILY QURAN: listen_quran")
+        return {
+            "player": "listen_quran",
+            "type": "daily_quran",
+            "isVoiceMode": True
+        }
+
+    if is_save_quran:
+        print("🎙️ MATCHED DAILY QURAN: save_quran_progress")
+        return {
+            "player": "save_quran_progress",
+            "type": "daily_quran",
+            "isVoiceMode": True
+        }
+
+    if is_continue_quran:
+        print("🎙️ MATCHED DAILY QURAN: continue_quran")
+        return {
+            "player": "continue_quran",
+            "type": "daily_quran",
+            "isVoiceMode": True
+        }
     
     # ============================================================
     # SECTION: HISTORY / STATS COMMANDS (Show vs Play)

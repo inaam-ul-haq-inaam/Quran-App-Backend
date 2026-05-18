@@ -11,6 +11,7 @@ from routers.History import last_played_route
 from routers.History import resume_position_route
 from routers.History import most_played_route
 from routers.History import update_position
+from routers.Daily import daily_quran_route
 
 
 app = FastAPI()
@@ -50,7 +51,8 @@ app.include_router(resume_position_route.router)
 app.include_router(most_played_route.router)
 #update position 
 app.include_router(update_position.router)
-
+#daily quran 
+app.include_router(daily_quran_route.router)
 
 from routers.Voice import voice_route
 from routers.Chain import showChainDetails
